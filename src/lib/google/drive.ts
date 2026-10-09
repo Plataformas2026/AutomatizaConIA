@@ -1,6 +1,6 @@
 import 'server-only';
 import { env } from '@/lib/env';
-import { GOOGLE_SHEET_MIME } from '@/lib/parsing/parse';
+import { GOOGLE_SHEET_MIME, XLSX_MIME } from '@/lib/parsing/parse';
 
 const API = 'https://www.googleapis.com/drive/v3';
 
@@ -74,7 +74,8 @@ export async function downloadFile(accessToken: string, meta: DriveFileMeta): Pr
   const id = encodeURIComponent(meta.id);
   const url =
     meta.mimeType === GOOGLE_SHEET_MIME
-      ? `${API}/files/${id}/export?mimeType=${encodeURIComponent('text/csv')}`
+      ? // Se exporta a .xlsx para tener TODAS las pestañas (el CSV solo trae la primera).
+        `${API}/files/${id}/export?mimeType=${encodeURIComponent(XLSX_MIME)}`
       : `${API}/files/${id}?alt=media&supportsAllDrives=true`;
 
   const res = await driveFetch(accessToken, url);

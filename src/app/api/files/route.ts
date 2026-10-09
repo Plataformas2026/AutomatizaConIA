@@ -6,10 +6,23 @@ import { decrypt } from '@/lib/crypto';
 import { getAccessToken } from '@/lib/google/oauth';
 import { ALLOWED_MIME_TYPES, getFileMeta, GoogleApiError } from '@/lib/google/drive';
 import { startWatch } from '@/lib/google/watch';
+import {
+  checkSheetSelection,
+  normalizeSelection,
+  sheetModeSchema,
+  sheetNamesSchema,
+} from '@/lib/files/sheet-selection';
 
 export const dynamic = 'force-dynamic';
 
-const bodySchema = z.object({ driveFileId: z.string().min(5).max(200) });
+const bodySchema = z
+  .object({
+    driveFileId: z.string().min(5).max(200),
+    // Hojas a vigilar (solo aplica a Excel / Google Sheets). Por defecto: la primera.
+    sheetMode: sheetModeSchema.default('first'),
+    sheetNames: sheetNamesSchema.default([]),
+  })
+  .superRefine(checkSheetSelection);
 
 /** Registra el archivo elegido en el Picker y abre su canal de notificaciones. */
 export async function POST(req: Request) {
@@ -58,6 +71,10 @@ export async function POST(req: Request) {
       status: 'active',
       last_version: meta.version, // base de referencia: solo reaccionamos a cambios posteriores
       created_by: ctx.user.id,
+      // Un CSV no tiene hojas: siempre "first".
+      ...(meta.mimeType === 'text/csv'
+        ? { sheet_mode: 'first', sheet_names: [] }
+        : normalizeSelection(body.data.sheetMode, body.data.sheetNames)),
     })
     .select('id')
     .single();

@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getSessionContext } from '@/lib/auth';
-import { RulesPanel } from '@/components/RulesPanel';
+import { FileWorkspace } from '@/components/FileWorkspace';
+import { FileTypeIcon } from '@/components/Icons';
 
 export default async function FilePage({ params }: { params: Promise<{ fileId: string }> }) {
   const { fileId } = await params;
@@ -10,7 +11,7 @@ export default async function FilePage({ params }: { params: Promise<{ fileId: s
 
   const { data: file } = await ctx.supabase
     .from('shared_files_metadata')
-    .select('id, name, status, last_error')
+    .select('id, name, mime_type, status, last_error')
     .eq('id', fileId)
     .maybeSingle();
   if (!file) notFound();
@@ -23,15 +24,23 @@ export default async function FilePage({ params }: { params: Promise<{ fileId: s
 
   return (
     <>
-      <p className="muted">
-        <Link href="/dashboard">← Archivos</Link>
+      <p className="back">
+        <Link href="/dashboard">← Volver al Dashboard</Link>
       </p>
-      <h1>{file.name}</h1>
+      <div className="page-title">
+        <FileTypeIcon mime={file.mime_type} />
+        <h1>{file.name}</h1>
+      </div>
       <p className="sub">
         Define cuándo avisarte. Las condiciones se evalúan al instante cada vez que el archivo cambia en tu Drive.
       </p>
-      {file.last_error && <div className="card err">{file.last_error}</div>}
-      <RulesPanel fileId={file.id} initialRules={rules ?? []} />
+      {file.last_error && <div className="notice notice-error">{file.last_error}</div>}
+      <FileWorkspace
+        fileId={file.id}
+        fileName={file.name}
+        isCsv={file.mime_type === 'text/csv'}
+        initialRules={rules ?? []}
+      />
     </>
   );
 }

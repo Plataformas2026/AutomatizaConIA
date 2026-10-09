@@ -2,6 +2,33 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { BrandMark } from '@/components/Icons';
+
+type Mode = 'login' | 'register';
+
+const MIN_PASSWORD = 8;
+const GENERIC_ERROR = 'No se pudo completar la operación. Inténtalo de nuevo.';
+
+function friendlyError(code: string | undefined): string {
+  switch (code) {
+    case 'invalid_credentials':
+      return 'Correo o contraseña incorrectos.';
+    case 'email_not_confirmed':
+      return 'Tu correo aún no está confirmado.';
+    case 'user_already_exists':
+      return 'Ya existe una cuenta con ese correo. Inicia sesión.';
+    case 'signup_disabled':
+      return 'El registro está desactivado. Pide a un administrador que cree tu cuenta.';
+    case 'weak_password':
+      return `La contraseña es demasiado débil. Usa al menos ${MIN_PASSWORD} caracteres.`;
+    case 'over_request_rate_limit':
+      return 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.';
+    case 'over_email_send_rate_limit':
+      return 'Se ha superado el límite de correos de confirmación. Inténtalo más tarde.';
+    default:
+      return GENERIC_ERROR;
+  }
+}
 
 type Mode = 'login' | 'register';
 
@@ -101,8 +128,16 @@ export default function LoginPage() {
 
   return (
     <main className="center">
+<<<<<<< HEAD
       <div className="card">
         <h1>Drive Alerts</h1>
+=======
+      <div className="login-card">
+        <div className="login-brand">
+          <BrandMark size={44} />
+          <h1>Drive Alerts</h1>
+        </div>
+>>>>>>> 88ca893 (Cambios de navegación, estéticos y de importación)
         <p className="sub">
           {mode === 'login' ? 'Inicia sesión con tu correo y contraseña.' : 'Crea tu cuenta con correo y contraseña.'}
         </p>
@@ -148,11 +183,15 @@ export default function LoginPage() {
 
         <p className="muted" style={{ marginTop: 16, textAlign: 'center' }}>
           {mode === 'login' ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}{' '}
+<<<<<<< HEAD
           <button
             type="button"
             onClick={switchMode}
             style={{ all: 'unset', color: 'var(--accent)', cursor: 'pointer' }}
           >
+=======
+          <button type="button" onClick={switchMode} className="linkbtn">
+>>>>>>> 88ca893 (Cambios de navegación, estéticos y de importación)
             {mode === 'login' ? 'Crear una' : 'Iniciar sesión'}
           </button>
         </p>

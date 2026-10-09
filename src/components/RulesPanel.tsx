@@ -3,8 +3,16 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { OPERATORS, OPERATOR_LABELS, isUnary, type Operator } from '@/lib/rules/operators';
+import { humanizeTemplate } from '@/lib/messages/variables';
+import { MessageBuilder, MESSAGE_MAX_LENGTH } from './MessageBuilder';
 
-interface RuleRow {
+export interface ColumnInfo {
+  name: string;
+  /** Hojas vigiladas en las que existe la columna ([] en CSV). */
+  sheets: string[];
+}
+
+export interface RuleRow {
   id: string;
   name: string;
   enabled: boolean;
@@ -25,12 +33,26 @@ function describe(c: RuleRow['condition']): string {
   return `«${c.left?.column}» ${op} ${right}`;
 }
 
-export function RulesPanel({ fileId, initialRules }: { fileId: string; initialRules: RuleRow[] }) {
-  const router = useRouter();
+const SEVERITIES = [
+  { value: 'info', label: 'Informativa' },
+  { value: 'warning', label: 'Aviso' },
+  { value: 'critical', label: 'Crítica' },
+] as const;
 
-  // Columnas: se leen al vuelo del archivo (no se guardan).
-  const [columns, setColumns] = useState<string[] | null>(null);
-  const [columnsError, setColumnsError] = useState<string | null>(null);
+interface Props {
+  fileId: string;
+  fileName: string;
+  initialRules: RuleRow[];
+  /** null mientras se leen del archivo. */
+  columns: ColumnInfo[] | null;
+  columnsError: string | null;
+  /** Hojas que se vigilan ahora mismo. */
+  active: string[];
+  hasSheets: boolean;
+}
+
+export function RulesPanel({ fileId, fileName, initialRules, columns, columnsError, active, hasSheets }: Props) {
+  const router = useRouter();
 
   // Formulario: [Variable 1] [Operador] [Variable 2 | Valor fijo]
   const [name, setName] = useState('');
@@ -40,39 +62,41 @@ export function RulesPanel({ fileId, initialRules }: { fileId: string; initialRu
   const [rightColumn, setRightColumn] = useState('');
   const [rightValue, setRightValue] = useState('');
   const [message, setMessage] = useState('');
+  const [msgReset, setMsgReset] = useState(0);
   const [severity, setSeverity] = useState<'info' | 'warning' | 'critical'>('info');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Al llegar (o cambiar) las columnas, conserva la elección si sigue existiendo.
   useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/files/${fileId}/columns`, { cache: 'no-store' })
-      .then(async (res) => {
-        const body = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!res.ok) {
-          setColumnsError(
-            body.error === 'file_too_large'
-              ? 'El archivo es demasiado grande para leerlo.'
-              : 'No se pudo leer el archivo para listar sus columnas.',
-          );
-          return;
-        }
-        setColumns(body.columns);
-        setLeft(body.columns[0] ?? '');
-        setRightColumn(body.columns[1] ?? body.columns[0] ?? '');
-      })
-      .catch(() => !cancelled && setColumnsError('No se pudo leer el archivo.'));
-    return () => {
-      cancelled = true;
-    };
-  }, [fileId]);
+    if (!columns?.length) return;
+    const names = columns.map((c) => c.name);
+    setLeft((cur) => (names.includes(cur) ? cur : names[0]));
+    setRightColumn((cur) => (names.includes(cur) ? cur : (names[1] ?? names[0])));
+  }, [columns]);
+
+  function columnLabel(c: ColumnInfo): string {
+    // Con varias hojas, avisa de las columnas que no están en todas.
+    if (active.length > 1 && c.sheets.length > 0 && c.sheets.length < active.length) {
+      return `${c.name} (solo en ${c.sheets.join(', ')})`;
+    }
+    return c.name;
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
-    setSaving(true);
 
+    if (!message.trim()) {
+      setFormError('Escribe el texto del aviso.');
+      return;
+    }
+    if (message.length > MESSAGE_MAX_LENGTH) {
+      setFormError(`El texto del aviso no puede pasar de ${MESSAGE_MAX_LENGTH} caracteres.`);
+      return;
+    }
+
+    setSaving(true);
     const condition = {
       kind: 'compare',
       left: { type: 'column', column: left },
@@ -105,6 +129,7 @@ export function RulesPanel({ fileId, initialRules }: { fileId: string; initialRu
     }
     setName('');
     setMessage('');
+    setMsgReset((n) => n + 1);
     setRightValue('');
     router.refresh();
   }
@@ -126,103 +151,138 @@ export function RulesPanel({ fileId, initialRules }: { fileId: string; initialRu
 
   return (
     <>
-      <h2>Nueva regla</h2>
-      <form className="card" onSubmit={onSubmit}>
-        {columnsError && <p className="err">{columnsError}</p>}
-        {!columns && !columnsError && <p className="muted">Leyendo las columnas de tu archivo…</p>}
+      <section className="panel" aria-labelledby="new-rule-title">
+        <h2 id="new-rule-title">Nueva regla</h2>
+        <form onSubmit={onSubmit}>
+          {columnsError && <p className="err">{columnsError}</p>}
+          {!columns && !columnsError && <p className="muted">Leyendo las columnas de tu archivo…</p>}
 
-        {columns && (
-          <>
-            <div className="field">
-              <label htmlFor="rule-name">Nombre de la regla</label>
-              <input id="rule-name" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
+          {columns && columns.length === 0 && (
+            <p className="err">No se encontraron columnas en las hojas que vigilas. Revisa la selección de hojas.</p>
+          )}
 
-            <div className="grid3">
+          {columns && columns.length > 0 && (
+            <>
               <div className="field">
-                <label htmlFor="left">Si la columna…</label>
-                <select id="left" value={left} onChange={(e) => setLeft(e.target.value)}>
-                  {columns.map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
+                <label htmlFor="rule-name">Nombre de la regla</label>
+                <input
+                  id="rule-name"
+                  required
+                  maxLength={120}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ej.: Stock bajo mínimo"
+                />
               </div>
 
-              <div className="field">
-                <label htmlFor="op">…cumple</label>
-                <select id="op" value={operator} onChange={(e) => setOperator(e.target.value as Operator)}>
-                  {OPERATORS.map((o) => (
-                    <option key={o} value={o}>
-                      {OPERATOR_LABELS[o]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {!isUnary(operator) && (
+              <div className="grid3">
                 <div className="field">
-                  <label htmlFor="right-type">
-                    <select
-                      id="right-type"
-                      value={rightType}
-                      onChange={(e) => setRightType(e.target.value as 'column' | 'value')}
-                      style={{ width: 'auto', padding: '0 4px', fontSize: 13 }}
-                    >
-                      <option value="value">Valor fijo</option>
-                      <option value="column">Otra columna</option>
-                    </select>
-                  </label>
-                  {rightType === 'column' ? (
-                    <select value={rightColumn} onChange={(e) => setRightColumn(e.target.value)}>
-                      {columns.map((c) => (
-                        <option key={c}>{c}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input required maxLength={500} value={rightValue} onChange={(e) => setRightValue(e.target.value)} />
-                  )}
+                  <label htmlFor="left">Si la columna…</label>
+                  <select id="left" value={left} onChange={(e) => setLeft(e.target.value)}>
+                    {columns.map((c) => (
+                      <option key={c.name} value={c.name}>
+                        {columnLabel(c)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              )}
-            </div>
 
-            <div className="field">
-              <label htmlFor="msg">Texto de la alerta</label>
-              <textarea
-                id="msg"
-                required
-                maxLength={500}
+                <div className="field">
+                  <label htmlFor="op">…cumple</label>
+                  <select id="op" value={operator} onChange={(e) => setOperator(e.target.value as Operator)}>
+                    {OPERATORS.map((o) => (
+                      <option key={o} value={o}>
+                        {OPERATOR_LABELS[o]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {!isUnary(operator) && (
+                  <div className="field">
+                    <label htmlFor="right-type">Comparar con</label>
+                    <div className="inline-pair">
+                      <select
+                        id="right-type"
+                        value={rightType}
+                        onChange={(e) => setRightType(e.target.value as 'column' | 'value')}
+                        aria-label="Tipo de comparación"
+                      >
+                        <option value="value">Valor fijo</option>
+                        <option value="column">Otra columna</option>
+                      </select>
+                      {rightType === 'column' ? (
+                        <select
+                          value={rightColumn}
+                          onChange={(e) => setRightColumn(e.target.value)}
+                          aria-label="Columna con la que comparar"
+                        >
+                          {columns.map((c) => (
+                            <option key={c.name} value={c.name}>
+                              {columnLabel(c)}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          required
+                          maxLength={500}
+                          value={rightValue}
+                          onChange={(e) => setRightValue(e.target.value)}
+                          aria-label="Valor fijo"
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <MessageBuilder
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Ej.: Hay {count} productos por debajo del stock mínimo (filas {rows})"
+                onChange={setMessage}
+                resetKey={msgReset}
+                fileName={fileName}
+                ruleName={name.trim() || 'Nombre de la regla'}
+                columnName={left || 'Columna'}
+                sheetName={active[0] ?? ''}
+                hasSheets={hasSheets}
               />
-              <span className="muted">Variables disponibles: {'{count} {rows} {file} {rule}'}</span>
-            </div>
 
-            <div className="field" style={{ maxWidth: 220 }}>
-              <label htmlFor="sev">Importancia</label>
-              <select id="sev" value={severity} onChange={(e) => setSeverity(e.target.value as typeof severity)}>
-                <option value="info">Informativa</option>
-                <option value="warning">Aviso</option>
-                <option value="critical">Crítica</option>
-              </select>
-            </div>
+              <div className="field" style={{ marginTop: 16 }}>
+                <span className="field-title">Importancia</span>
+                <div className="sev-choice" role="radiogroup" aria-label="Importancia">
+                  {SEVERITIES.map((s) => (
+                    <label key={s.value} className={`sev-opt sev-${s.value} ${severity === s.value ? 'is-on' : ''}`}>
+                      <input
+                        type="radio"
+                        name="severity"
+                        value={s.value}
+                        checked={severity === s.value}
+                        onChange={() => setSeverity(s.value)}
+                      />
+                      {s.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
 
-            {formError && <p className="err">{formError}</p>}
-            <button className="btn primary" disabled={saving}>
-              {saving ? 'Guardando…' : 'Guardar regla'}
-            </button>
-          </>
-        )}
-      </form>
+              {formError && <p className="err">{formError}</p>}
+              <button className="btn primary" disabled={saving}>
+                {saving ? 'Guardando…' : 'Guardar regla'}
+              </button>
+            </>
+          )}
+        </form>
+      </section>
 
       <h2>Reglas del archivo</h2>
       {!initialRules.length && <p className="muted">Aún no hay reglas.</p>}
       {initialRules.map((r) => (
-        <div className="card row wrap" key={r.id}>
+        <div className={`rule-item ${r.enabled ? '' : 'is-off'}`} key={r.id}>
           <div className="grow">
             <strong>{r.name}</strong> {!r.enabled && <span className="pill paused">Desactivada</span>}
             <div className="muted">Si {describe(r.condition)}</div>
-            <div className="muted">→ Alerta: {r.actions[0]?.message}</div>
+            <div className="rule-msg">{humanizeTemplate(r.actions[0]?.message ?? '')}</div>
             {r.last_error && <div className="err">{r.last_error}</div>}
           </div>
           <button className="btn" onClick={() => toggle(r)}>

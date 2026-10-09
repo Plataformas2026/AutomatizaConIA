@@ -2,77 +2,122 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useAlerts, type AlertRow } from './AlertsProvider';
+import { IconBell, IconCheck, IconTable } from './Icons';
 
-interface AlertRow {
-  id: string;
-  file_name: string;
-  rule_name: string;
-  message: string;
-  severity: 'info' | 'warning' | 'critical';
-  matched_count: number;
-  row_refs: number[];
-  status: 'open' | 'read' | 'dismissed';
-  created_at: string;
-}
+const SEVERITY_LABEL = { info: 'Informativa', warning: 'Aviso', critical: 'Crítica' } as const;
 
-export function AlertsList({ companyId, initial }: { companyId: string; initial: AlertRow[] }) {
+export function AlertsList({ initial }: { initial: AlertRow[] }) {
   const [alerts, setAlerts] = useState<AlertRow[]>(initial);
-  const supabase = createClient();
+  const { adjustUnread, refreshUnread, onNewAlert, unread } = useAlerts();
+  const [error, setError] = useState<string | null>(null);
 
-  // Tiempo real: Supabase Realtime respeta RLS, solo llegan alertas de tu empresa.
-  useEffect(() => {
-    const channel = supabase
-      .channel(`alerts:${companyId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'alerts', filter: `company_id=eq.${companyId}` },
-        (payload) => setAlerts((prev) => [payload.new as AlertRow, ...prev]),
-      )
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId]);
+  // Las alertas nuevas llegan por la suscripción única del proveedor.
+  useEffect(
+    () =>
+      onNewAlert((a) =>
+        setAlerts((prev) => (prev.some((p) => p.id === a.id) ? prev : [{ ...a, row_refs: a.row_refs ?? [] }, ...prev])),
+      ),
+    [onNewAlert],
+  );
 
-  async function setStatus(id: string, status: 'read' | 'dismissed') {
-    const { error } = await supabase
+  async function setStatus(alert: AlertRow, status: 'read' | 'dismissed') {
+    setError(null);
+    const { error: dbError } = await createClient()
       .from('alerts')
       .update({ status, read_at: new Date().toISOString() })
-      .eq('id', id);
-    if (error) return;
+      .eq('id', alert.id);
+    if (dbError) {
+      setError('No se pudo actualizar la alerta. Inténtalo de nuevo.');
+      return;
+    }
+    if (alert.status === 'open') adjustUnread(-1);
     setAlerts((prev) =>
-      status === 'dismissed' ? prev.filter((a) => a.id !== id) : prev.map((a) => (a.id === id ? { ...a, status } : a)),
+      status === 'dismissed'
+        ? prev.filter((a) => a.id !== alert.id)
+        : prev.map((a) => (a.id === alert.id ? { ...a, status } : a)),
     );
   }
 
-  if (!alerts.length) return <p className="muted">No hay alertas. Todo en orden.</p>;
+  async function markAllRead() {
+    setError(null);
+    const { error: dbError } = await createClient()
+      .from('alerts')
+      .update({ status: 'read', read_at: new Date().toISOString() })
+      .eq('status', 'open');
+    if (dbError) {
+      setError('No se pudieron marcar las alertas. Inténtalo de nuevo.');
+      return;
+    }
+    setAlerts((prev) => prev.map((a) => (a.status === 'open' ? { ...a, status: 'read' } : a)));
+    await refreshUnread();
+  }
+
+  if (!alerts.length) {
+    return (
+      <div className="empty">
+        <span className="empty-icon">
+          <IconCheck size={28} />
+        </span>
+        <strong>Todo en orden</strong>
+        <p className="muted">Cuando una regla se cumpla, la alerta aparecerá aquí al instante.</p>
+      </div>
+    );
+  }
 
   return (
     <>
-      {alerts.map((a) => (
-        <div key={a.id} className={`card sev-${a.severity} ${a.status === 'read' ? 'alert-read' : ''}`}>
-          <div className="row wrap">
+      <div className="list-head">
+        <span className="muted">
+          {unread > 0 ? `${unread} sin leer` : 'Todas leídas'}
+        </span>
+        {unread > 0 && (
+          <button className="btn" onClick={markAllRead}>
+            <IconCheck size={16} />
+            Marcar todas como leídas
+          </button>
+        )}
+      </div>
+      {error && <p className="err">{error}</p>}
+
+      <ul className="alert-list">
+        {alerts.map((a) => (
+          <li key={a.id} className={`alert-item sev-${a.severity} ${a.status === 'read' ? 'is-read' : 'is-open'}`}>
+            <span className="alert-sev" title={SEVERITY_LABEL[a.severity]}>
+              <IconBell size={18} />
+            </span>
             <div className="grow">
-              <strong>{a.message}</strong>
-              <div className="muted">
-                {a.file_name} · {a.rule_name} · {a.matched_count} fila{a.matched_count === 1 ? '' : 's'}
-                {a.row_refs.length > 0 &&
-                  ` (${a.row_refs.slice(0, 10).join(', ')}${a.matched_count > 10 ? '…' : ''})`}
+              <strong className="alert-msg">{a.message}</strong>
+              <div className="chips">
+                <span className="tag tag-file">
+                  <IconTable size={14} />
+                  {a.file_name}
+                </span>
+                {a.sheet_name && <span className="tag tag-sheet">Hoja «{a.sheet_name}»</span>}
+                <span className="tag tag-rule">Regla «{a.rule_name}»</span>
+                <span className="tag tag-count">
+                  {a.matched_count} fila{a.matched_count === 1 ? '' : 's'}
+                  {a.row_refs?.length > 0 &&
+                    `: ${a.row_refs.slice(0, 10).join(', ')}${a.matched_count > 10 ? '…' : ''}`}
+                </span>
               </div>
-              <div className="muted">{new Date(a.created_at).toLocaleString('es-ES')}</div>
+              <time className="muted" dateTime={a.created_at}>
+                {new Date(a.created_at).toLocaleString('es-ES')}
+              </time>
             </div>
-            {a.status === 'open' && (
-              <button className="btn" onClick={() => setStatus(a.id, 'read')}>
-                Marcar leída
+            <div className="alert-actions">
+              {a.status === 'open' && (
+                <button className="btn" onClick={() => setStatus(a, 'read')}>
+                  Marcar leída
+                </button>
+              )}
+              <button className="btn ghost-line" onClick={() => setStatus(a, 'dismissed')}>
+                Descartar
               </button>
-            )}
-            <button className="btn" onClick={() => setStatus(a.id, 'dismissed')}>
-              Descartar
-            </button>
-          </div>
-        </div>
-      ))}
+            </div>
+          </li>
+        ))}
+      </ul>
     </>
   );
 }

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/rules/engine.test.ts"
+    "test": "tsx --test src/lib/rules/engine.test.ts src/lib/parsing/parse.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

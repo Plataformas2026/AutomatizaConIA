@@ -69,3 +69,45 @@ test('evaluateRule: columna inexistente devuelve error, no excepción', () => {
   assert.match(r.error ?? '', /Precio/);
   assert.equal(r.matchedCount, 0);
 });
+
+/* ── Varias hojas ─────────────────────────────────────────── */
+import { evaluateRuleAcrossSheets } from './engine';
+
+const sheetA = {
+  sheetName: 'Enero',
+  table: { headers: ['Producto', 'Stock'], truncated: false, rows: [
+    { rowNumber: 2, values: { Producto: 'A', Stock: 1 } },
+    { rowNumber: 3, values: { Producto: 'B', Stock: 99 } },
+  ] },
+};
+const sheetB = {
+  sheetName: 'Febrero',
+  table: { headers: ['Producto', 'Stock'], truncated: false, rows: [
+    { rowNumber: 2, values: { Producto: 'C', Stock: 2 } },
+    { rowNumber: 3, values: { Producto: 'D', Stock: 3 } },
+  ] },
+};
+const sheetNoCol = { sheetName: 'Notas', table: { headers: ['Texto'], truncated: false, rows: [] } };
+
+const lowStock: Condition = {
+  kind: 'compare',
+  left: { type: 'column', column: 'Stock' },
+  operator: 'lt',
+  right: { type: 'value', value: '10' },
+};
+
+test('evaluateRuleAcrossSheets: resultado por hoja y se omite la hoja sin la columna', () => {
+  const r = evaluateRuleAcrossSheets({ id: 'm1', condition: lowStock }, [sheetA, sheetB, sheetNoCol]);
+  assert.equal(r.error, undefined);
+  assert.deepEqual(r.sheets.map((s) => [s.sheetName, s.matchedRows]), [
+    ['Enero', [2]],
+    ['Febrero', [2, 3]],
+  ]);
+});
+
+test('evaluateRuleAcrossSheets: error solo si ninguna hoja tiene las columnas', () => {
+  const r = evaluateRuleAcrossSheets({ id: 'm2', condition: lowStock }, [sheetNoCol, { ...sheetNoCol, sheetName: 'Otra' }]);
+  assert.match(r.error ?? '', /ninguna de las hojas/);
+  const none = evaluateRuleAcrossSheets({ id: 'm3', condition: lowStock }, []);
+  assert.match(none.error ?? '', /No hay hojas/);
+});

@@ -1,6 +1,6 @@
 import type { Operator } from './operators';
 import type { Condition } from './types';
-import type { ParsedTable } from '../parsing/parse';
+import type { ParsedTable, SheetTable } from '../parsing/parse';
 
 /** Evaluador PURO: recibe la tabla en memoria y devuelve solo nº de fila.
  *  No hace I/O, no registra nada. */
@@ -160,4 +160,57 @@ export function evaluateRule(
     if (compare(l, condition.operator, r)) matched.push(row.rowNumber);
   }
   return { ruleId: rule.id, matchedRows: matched, matchedCount: matched.length };
+}
+
+/* ── Evaluación sobre varias hojas ─────────────────────────── */
+
+export interface SheetEvaluation {
+  /** null en CSV (sin hojas). */
+  sheetName: string | null;
+  matchedRows: number[];
+  matchedCount: number;
+}
+
+export interface MultiSheetEvaluation {
+  ruleId: string;
+  /** Solo las hojas donde la regla se pudo evaluar (tienen las columnas). */
+  sheets: SheetEvaluation[];
+  error?: string;
+}
+
+/**
+ * Evalúa la regla en cada hoja. Una hoja que no tiene las columnas de la regla
+ * se omite sin más; solo hay error si NINGUNA hoja puede evaluarla.
+ */
+export function evaluateRuleAcrossSheets(
+  rule: { id: string; condition: Condition },
+  sheets: SheetTable[],
+): MultiSheetEvaluation {
+  if (sheets.length === 0) {
+    return { ruleId: rule.id, sheets: [], error: 'No hay hojas que vigilar: revisa la selección de hojas' };
+  }
+
+  const results: SheetEvaluation[] = [];
+  let firstError: string | undefined;
+
+  for (const s of sheets) {
+    const ev = evaluateRule(rule, s.table);
+    if (ev.error) {
+      firstError ??= ev.error;
+      continue;
+    }
+    results.push({ sheetName: s.sheetName, matchedRows: ev.matchedRows, matchedCount: ev.matchedCount });
+  }
+
+  if (results.length === 0) {
+    return {
+      ruleId: rule.id,
+      sheets: [],
+      error:
+        sheets.length === 1
+          ? firstError
+          : 'Las columnas de la regla no existen en ninguna de las hojas vigiladas',
+    };
+  }
+  return { ruleId: rule.id, sheets: results };
 }

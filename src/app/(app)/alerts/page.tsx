@@ -8,7 +8,7 @@ export default async function AlertsPage() {
 
   const { data: alerts } = await ctx.supabase
     .from('alerts')
-    .select('id, file_name, rule_name, message, severity, matched_count, row_refs, status, created_at')
+    .select('id, file_name, rule_name, sheet_name, message, severity, matched_count, row_refs, status, created_at')
     .neq('status', 'dismissed')
     .order('created_at', { ascending: false })
     .limit(100);
@@ -17,7 +17,7 @@ export default async function AlertsPage() {
     <>
       <h1>Alertas</h1>
       <p className="sub">Se actualizan solas cuando cambia alguno de tus archivos.</p>
-      <AlertsList companyId={ctx.companyId} initial={alerts ?? []} />
+      <AlertsList initial={alerts ?? []} />
     </>
   );
 }

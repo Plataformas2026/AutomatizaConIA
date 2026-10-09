@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getSessionContext } from '@/lib/auth';
 import { DrivePicker } from '@/components/DrivePicker';
 import { FileActions } from '@/components/FileActions';
+import { FileTypeIcon } from '@/components/Icons';
 
 const NOTICES: Record<string, string> = {
   connected: 'Google Drive conectado. Ahora elige un archivo.',
@@ -22,6 +23,14 @@ const STATUS_LABEL: Record<string, string> = {
   revoked: 'Reconectar',
 };
 
+function sheetsLabel(mode: string, names: string[] | null): string {
+  if (mode === 'all') return 'Todas las hojas';
+  if (mode === 'selected' && names?.length) {
+    return names.length === 1 ? `Hoja «${names[0]}»` : `${names.length} hojas`;
+  }
+  return 'Primera hoja';
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -35,7 +44,7 @@ export default async function DashboardPage({
     ctx.supabase.from('google_connections').select('id, google_email, status'),
     ctx.supabase
       .from('shared_files_metadata')
-      .select('id, name, status, last_checked_at, last_error, watch_expires_at')
+      .select('id, name, mime_type, sheet_mode, sheet_names, status, last_checked_at, last_error, watch_expires_at')
       .order('created_at', { ascending: false }),
   ]);
 
@@ -44,14 +53,14 @@ export default async function DashboardPage({
 
   return (
     <>
-      <h1>Archivos</h1>
+      <h1>Dashboard</h1>
       <p className="sub">
         Tus archivos permanecen en tu Google Drive. Aquí solo guardamos la configuración y las alertas.
       </p>
 
-      {google && NOTICES[google] && <div className="card">{NOTICES[google]}</div>}
+      {google && NOTICES[google] && <div className="notice">{NOTICES[google]}</div>}
 
-      <div className="card row wrap">
+      <div className="panel connect row wrap">
         <div className="grow">
           {active ? (
             <>
@@ -76,26 +85,32 @@ export default async function DashboardPage({
 
       <h2>Archivos compartidos</h2>
       {!files?.length && <p className="muted">Todavía no has compartido ningún archivo.</p>}
-      {files?.map((f) => (
-        <div className="card row wrap" key={f.id}>
-          <div className="grow">
-            <Link href={`/files/${f.id}`}>
-              <strong>{f.name}</strong>
-            </Link>{' '}
-            <span className={`pill ${f.status}`}>{STATUS_LABEL[f.status] ?? f.status}</span>
-            <div className="muted">
-              {f.last_checked_at
-                ? `Última comprobación: ${new Date(f.last_checked_at).toLocaleString('es-ES')}`
-                : 'Aún sin comprobar'}
+      <ul className="file-rows">
+        {files?.map((f) => (
+          <li className="file-row" key={f.id}>
+            <FileTypeIcon mime={f.mime_type} />
+            <div className="grow">
+              <Link href={`/files/${f.id}`} className="file-name">
+                {f.name}
+              </Link>{' '}
+              <span className={`pill ${f.status}`}>{STATUS_LABEL[f.status] ?? f.status}</span>
+              {f.mime_type !== 'text/csv' && (
+                <span className="tag tag-sheet">{sheetsLabel(f.sheet_mode, f.sheet_names)}</span>
+              )}
+              <div className="muted">
+                {f.last_checked_at
+                  ? `Última comprobación: ${new Date(f.last_checked_at).toLocaleString('es-ES')}`
+                  : 'Aún sin comprobar'}
+              </div>
+              {f.last_error && <div className="err">{f.last_error}</div>}
             </div>
-            {f.last_error && <div className="err">{f.last_error}</div>}
-          </div>
-          <Link className="btn" href={`/files/${f.id}`}>
-            Reglas
-          </Link>
-          <FileActions fileId={f.id} />
-        </div>
-      ))}
+            <Link className="btn" href={`/files/${f.id}`}>
+              Reglas y hojas
+            </Link>
+            <FileActions fileId={f.id} />
+          </li>
+        ))}
+      </ul>
     </>
   );
 }

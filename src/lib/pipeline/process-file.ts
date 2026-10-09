@@ -3,8 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { decrypt, matchFingerprint } from '@/lib/crypto';
 import { forgetAccessToken, getAccessToken, GoogleAuthRevokedError } from '@/lib/google/oauth';
 import { downloadFile, FileTooLargeError, getFileMeta, GoogleApiError } from '@/lib/google/drive';
-import { GOOGLE_SHEET_MIME, parseTable } from '@/lib/parsing/parse';
-import { evaluateRule } from '@/lib/rules/engine';
+import { parseMimeFor, parseWorkbook, type SheetSelection } from '@/lib/parsing/parse';
+import { evaluateRuleAcrossSheets } from '@/lib/rules/engine';
 import { ruleSchema } from '@/lib/rules/types';
 import { runActions } from '@/lib/actions';
 
@@ -17,15 +17,18 @@ export type ProcessResult =
  * Lectura efímera + evaluación + alerta.
  *
  * Invariante de privacidad: el contenido del archivo existe SOLO dentro de este
- * bloque `try` (variable `table`). Se pasa a evaluateRule (puro) y de ahí solo
- * salen números de fila. No hay console.log de filas ni escritura a disco/BD.
+ * bloque `try` (variable `workbook`). Se pasa a evaluateRuleAcrossSheets (puro) y
+ * de ahí solo salen números de fila. No hay console.log de filas ni escritura
+ * a disco/BD.
  */
 export async function processFile(fileId: string, opts: { force?: boolean } = {}): Promise<ProcessResult> {
   const admin = createAdminClient();
 
   const { data: file } = await admin
     .from('shared_files_metadata')
-    .select('id, company_id, google_token_id, drive_file_id, name, mime_type, status, last_version')
+    .select(
+      'id, company_id, google_token_id, drive_file_id, name, mime_type, status, last_version, sheet_mode, sheet_names',
+    )
     .eq('id', fileId)
     .maybeSingle();
   if (!file) return { status: 'skipped', reason: 'file_not_found' };
@@ -37,6 +40,11 @@ export async function processFile(fileId: string, opts: { force?: boolean } = {}
     .eq('id', file.google_token_id)
     .maybeSingle();
   if (!token || token.status !== 'active') return { status: 'skipped', reason: 'token_inactive' };
+
+  const selection: SheetSelection = {
+    mode: (file.sheet_mode ?? 'first') as SheetSelection['mode'],
+    names: (file.sheet_names ?? []) as string[],
+  };
 
   let claimedVersion: string | null = null;
 
@@ -77,16 +85,24 @@ export async function processFile(fileId: string, opts: { force?: boolean } = {}
 
     const { data: rawRules } = await admin
       .from('rules')
-      .select('id, name, condition, actions, last_fingerprint')
+      .select('id, name, condition, actions, last_fingerprints')
       .eq('file_id', file.id)
       .eq('enabled', true);
 
     // Sin reglas activas no hace falta ni descargar el archivo.
     if (!rawRules?.length) return { status: 'processed', rules: 0, alerts: 0 };
 
-    const effectiveMime = meta.mimeType === GOOGLE_SHEET_MIME ? GOOGLE_SHEET_MIME : file.mime_type;
     const buffer = await downloadFile(accessToken, meta);
-    const table = parseTable(buffer, effectiveMime); // ← datos del usuario, solo en memoria
+    const workbook = parseWorkbook(buffer, parseMimeFor(meta.mimeType), selection); // ← datos del usuario, solo en memoria
+
+    // Hojas elegidas que ya no existen (renombradas o borradas en Drive).
+    if (workbook.sheets.length === 0) {
+      await admin
+        .from('shared_files_metadata')
+        .update({ last_error: 'Las hojas seleccionadas ya no existen en el archivo. Elige otras en «Hojas vigiladas».' })
+        .eq('id', file.id);
+      return { status: 'processed', rules: rawRules.length, alerts: 0 };
+    }
 
     let alerts = 0;
     const now = new Date().toISOString();
@@ -99,32 +115,42 @@ export async function processFile(fileId: string, opts: { force?: boolean } = {}
         continue;
       }
       const rule = parsed.data;
-      const evaluation = evaluateRule(rule, table);
+      const evaluation = evaluateRuleAcrossSheets(rule, workbook.sheets);
 
       if (evaluation.error) {
         await admin.from('rules').update({ last_error: evaluation.error, last_evaluated_at: now }).eq('id', rule.id);
         continue;
       }
 
-      const fingerprint =
-        evaluation.matchedCount > 0 ? matchFingerprint(rule.id, evaluation.matchedRows) : null;
+      // Una huella por hoja: solo alertamos por las hojas cuyo conjunto de filas cambió.
+      const previous = (raw.last_fingerprints ?? {}) as Record<string, string>;
+      const next: Record<string, string> = {};
 
-      // Solo alertamos cuando el conjunto de filas que cumple cambia.
-      if (fingerprint && fingerprint !== raw.last_fingerprint) {
-        await runActions(rule.actions, {
-          admin,
-          companyId: file.company_id,
-          file: { id: file.id, name: file.name },
-          rule: { id: rule.id, name: rule.name },
-          matchedCount: evaluation.matchedCount,
-          rowRefs: evaluation.matchedRows.slice(0, 200),
-        });
-        alerts++;
+      for (const sheet of evaluation.sheets) {
+        const key = sheet.sheetName ?? '';
+        const fingerprint =
+          sheet.matchedCount > 0 ? matchFingerprint(`${rule.id}|${key}`, sheet.matchedRows) : null;
+        if (!fingerprint) continue;
+        next[key] = fingerprint;
+
+        if (fingerprint !== previous[key]) {
+          await runActions(rule.actions, {
+            admin,
+            companyId: file.company_id,
+            file: { id: file.id, name: file.name },
+            rule: { id: rule.id, name: rule.name },
+            sheetName: sheet.sheetName,
+            columnName: rule.condition.left.column,
+            matchedCount: sheet.matchedCount,
+            rowRefs: sheet.matchedRows.slice(0, 200),
+          });
+          alerts++;
+        }
       }
 
       await admin
         .from('rules')
-        .update({ last_fingerprint: fingerprint, last_error: null, last_evaluated_at: now })
+        .update({ last_fingerprints: next, last_error: null, last_evaluated_at: now })
         .eq('id', rule.id);
     }
 
