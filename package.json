@@ -1,5 +1,5 @@
 {
-  "name": "drive-alerts",
+  "name": "automatizacion-con-ia",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/rules/engine.test.ts src/lib/parsing/parse.test.ts"
+    "test": "tsx --test src/lib/rules/engine.test.ts src/lib/parsing/parse.test.ts src/lib/stats/compute.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
@@ -16,6 +16,8 @@
     "papaparse": "^5.4.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-is": "^19.0.0",
+    "recharts": "^3.10.1",
     "server-only": "^0.0.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^3.25.0"

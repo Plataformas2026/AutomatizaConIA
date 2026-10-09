@@ -19,7 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="topbar-inner">
           <span className="brand">
             <BrandMark size={30} />
-            Drive Alerts
+            Automatización con IA
           </span>
           <NavTabs />
           <form action="/auth/signout" method="post" className="signout">

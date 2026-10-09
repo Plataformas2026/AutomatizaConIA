@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAlerts } from './AlertsProvider';
-import { IconBell, IconGrid } from './Icons';
+import { IconBell, IconChart, IconGrid } from './Icons';
 
 /** Barra de pestañas: la sección actual queda marcada con color, subrayado y aria-current. */
 export function NavTabs() {
@@ -12,6 +12,7 @@ export function NavTabs() {
 
   const onDashboard = pathname === '/dashboard' || pathname.startsWith('/files');
   const onAlerts = pathname.startsWith('/alerts');
+  const onStats = pathname.startsWith('/stats');
   const badge = unread > 99 ? '99+' : `+${unread}`;
 
   return (
@@ -41,6 +42,15 @@ export function NavTabs() {
         </span>
         Alertas
         {unread > 0 && <span className="sr-only">, {unread} sin leer</span>}
+      </Link>
+      <Link
+        href="/stats"
+        className={`tab ${onStats ? 'is-active' : ''}`}
+        style={{ ['--tab-color' as string]: 'var(--teal)' }}
+        aria-current={onStats ? 'page' : undefined}
+      >
+        <IconChart size={18} />
+        Estadísticas
       </Link>
     </nav>
   );

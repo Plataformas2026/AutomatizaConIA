@@ -1,4 +1,4 @@
-# Drive Alerts
+# Automatización con IA
 
 Alertas en **tiempo real** sobre hojas de cálculo de Google Drive, **sin copiar nunca los datos** del usuario.
 
@@ -170,3 +170,10 @@ Tests: `npm test` · Tipos: `npm run typecheck`
 - **Condiciones compuestas (Y/O)**: `condition.kind` ya es discriminante; añade `{kind:'group', op, conditions[]}` en `types.ts` y recursión en `evaluateRule`. No hay migración de BD.
 - **Varios usuarios por empresa**: el esquema ya los soporta (`company_members`); falta la pantalla de invitaciones.
 - **Elegir hoja concreta de un Excel**: añadir `sheet_name` a `shared_files_metadata` y usarlo en `parseTable`.
+
+## Estadísticas
+
+La pestaña **Estadísticas** (`/stats`) permite montar un panel de gráficas propio: 12 tipos (barras, barras horizontales, barras apiladas, líneas, área, área apilada, tarta, donut, radar, dispersión, métrica KPI y tabla resumen), con desplegables para archivo, hoja, eje X, eje Y (suma, promedio, mediana, mínimo, máximo, recuento y valores distintos) y título.
+
+- **Zero-storage**: los datos se leen de Drive al vuelo, se agregan en memoria y solo viajan al navegador cifras ya agregadas. En la base de datos solo se guarda la configuración de cada gráfica (`stats_charts`, migración `0004_stats_charts.sql`), con RLS por usuario.
+- API: `POST /api/stats/query` (datos agregados), `GET /api/stats/structure` (hojas y columnas), `POST/PATCH/DELETE /api/stats/charts` (configuración).

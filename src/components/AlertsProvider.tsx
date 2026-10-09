@@ -126,7 +126,7 @@ export function AlertsProvider({
     };
   }, [companyId, dismissToast, refreshUnread]);
 
-  // El título de la pestaña del navegador también avisa: «(3) Drive Alerts».
+  // El título de la pestaña del navegador también avisa: «(3) Automatización con IA».
   useEffect(() => {
     const base = document.title.replace(/^\(\d+\+?\)\s*/, '');
     document.title = unread > 0 ? `(${unread > 99 ? '99+' : unread}) ${base}` : base;
