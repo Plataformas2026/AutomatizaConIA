@@ -49,7 +49,10 @@ export async function GET(req: NextRequest) {
       },
       { onConflict: 'company_id,google_email' },
     );
-    if (error) return back('google=save_error');
+    if (error) {
+      console.error('ERROR DE SUPABASE AL GUARDAR TOKEN:', error);
+      return new Response(`Error de Supabase al guardar: ${JSON.stringify(error)}`, { status: 500 });
+    }
 
     // Si era una reconexión, reactivamos los archivos que quedaron como "revoked".
     await admin
@@ -59,7 +62,11 @@ export async function GET(req: NextRequest) {
       .eq('status', 'revoked');
 
     return back('google=connected');
-  } catch {
-    return back('google=exchange_error');
+  } catch (err: any) {
+    console.error('ERROR DETALLADO EN EXCHANGE/CALLBACK:', err);
+    return new Response(
+      `Fallo crítico en callback de Google: ${err.message || JSON.stringify(err)}`,
+      { status: 500 }
+    );
   }
 }
