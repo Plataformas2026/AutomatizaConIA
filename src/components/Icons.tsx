@@ -136,3 +136,37 @@ export function IconTableView(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconSpark(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Z" />
+      <path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z" />
+    </Svg>
+  );
+}
+
+export function IconDownload(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 20h14" />
+    </Svg>
+  );
+}
+
+export function IconSave(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M5 4h11l3 3v13H5V4Z" />
+      <path d="M8 4v5h7V4M8 20v-6h8v6" />
+    </Svg>
+  );
+}
+
+export function IconPrint(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M7 9V4h10v5M7 17H5v-6h14v6h-2M8 14h8v6H8v-6Z" />
+    </Svg>
+  );
+}

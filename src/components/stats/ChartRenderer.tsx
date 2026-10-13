@@ -29,7 +29,7 @@ import { AGG_LABELS, STACKABLE_AGGS, type ChartConfig, type ChartResult } from '
 import { fmt, fmtCompact, SERIES, truncate } from './format';
 
 const HEIGHT = 300;
-const AXIS = { fontSize: 12, fill: 'var(--muted)' } as const;
+export const AXIS = { fontSize: 12, fill: 'var(--muted)' } as const;
 
 /* ── Tooltip común: usa los tokens de texto, no el color de la serie ── */
 
@@ -40,7 +40,7 @@ interface TipItem {
   payload?: Record<string, unknown>;
 }
 
-function ChartTooltip({
+export function ChartTooltip({
   active,
   payload,
   label,
@@ -67,7 +67,7 @@ function ChartTooltip({
   );
 }
 
-const legendProps = {
+export const legendProps = {
   iconType: 'circle' as const,
   iconSize: 9,
   wrapperStyle: { fontSize: 12, paddingTop: 8 },

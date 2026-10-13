@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAlerts } from './AlertsProvider';
-import { IconBell, IconChart, IconGrid } from './Icons';
+import { IconBell, IconChart, IconGrid, IconSpark } from './Icons';
 
 /** Barra de pestañas: la sección actual queda marcada con color, subrayado y aria-current. */
 export function NavTabs() {
@@ -13,6 +13,7 @@ export function NavTabs() {
   const onDashboard = pathname === '/dashboard' || pathname.startsWith('/files');
   const onAlerts = pathname.startsWith('/alerts');
   const onStats = pathname.startsWith('/stats');
+  const onModels = pathname.startsWith('/models');
   const badge = unread > 99 ? '99+' : `+${unread}`;
 
   return (
@@ -51,6 +52,15 @@ export function NavTabs() {
       >
         <IconChart size={18} />
         Estadísticas
+      </Link>
+      <Link
+        href="/models"
+        className={`tab ${onModels ? 'is-active' : ''}`}
+        style={{ ['--tab-color' as string]: 'var(--amber)' }}
+        aria-current={onModels ? 'page' : undefined}
+      >
+        <IconSpark size={18} />
+        Informes y Modelos IA
       </Link>
     </nav>
   );
