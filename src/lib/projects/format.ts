@@ -10,9 +10,10 @@ export interface FileRowDb {
   last_checked_at: string | null;
   last_error: string | null;
   project_id: string | null;
+  source: string | null;
 }
 
-export const FILE_COLUMNS = 'id, name, mime_type, sheet_mode, sheet_names, status, last_checked_at, last_error, project_id';
+export const FILE_COLUMNS = 'id, name, mime_type, sheet_mode, sheet_names, status, last_checked_at, last_error, project_id, source';
 
 function sheetsLabel(mode: string, names: string[] | null): string {
   if (mode === 'all') return 'Todas las hojas';
@@ -32,8 +33,11 @@ export function toFileItem(f: FileRowDb): FileItem {
     sheetsLabel: f.mime_type === 'text/csv' ? null : sheetsLabel(f.sheet_mode, f.sheet_names),
     checkedLabel: f.last_checked_at
       ? `Última comprobación: ${new Date(f.last_checked_at).toLocaleString('es-ES')}`
-      : 'Aún sin comprobar',
+      : f.source === 'local'
+        ? 'Esperando al agente de tu ordenador…'
+        : 'Aún sin comprobar',
     lastError: f.last_error,
     projectId: f.project_id,
+    source: f.source === 'local' ? 'local' : 'drive',
   };
 }

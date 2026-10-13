@@ -31,7 +31,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ fileId
   // RLS: si el archivo no es de su empresa, no aparece.
   const { data: file } = await ctx.supabase
     .from('shared_files_metadata')
-    .select('id, mime_type')
+    .select('id, mime_type, source')
     .eq('id', fileId)
     .maybeSingle();
   if (!file) return NextResponse.json({ error: 'not_found' }, { status: 404 });
@@ -44,13 +44,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ fileId
     .eq('id', file.id);
   if (error) return NextResponse.json({ error: 'db_error' }, { status: 500 });
 
-  after(async () => {
-    try {
-      await processFile(file.id, { force: true });
-    } catch {
-      /* el error queda reflejado en shared_files_metadata.last_error */
-    }
-  });
+  // Archivo local: el agente del PC detecta el cambio de configuración y reevalúa solo.
+  if (file.source !== 'local') {
+    after(async () => {
+      try {
+        await processFile(file.id, { force: true });
+      } catch {
+        /* el error queda reflejado en shared_files_metadata.last_error */
+      }
+    });
+  }
 
   return NextResponse.json({ ok: true, ...selection });
 }

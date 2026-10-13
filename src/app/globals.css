@@ -781,3 +781,28 @@ input[type='radio'], input[type='checkbox'] { width: auto; accent-color: var(--v
 @media (prefers-reduced-motion: reduce) {
   .pcard, .pcard:hover, .pcard.is-over { transition: none; transform: none; }
 }
+
+/* ═════════════ Archivos locales y agente ═════════════ */
+.tag-local { background: var(--coral-soft); color: var(--critical-ink); }
+.notice-warn { background: var(--warning-soft); color: var(--warning-ink); }
+.agent-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 8px; }
+.agent-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.agent-pill.is-online { color: var(--ok); }
+.agent-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border); flex: none; display: inline-block; }
+.agent-dot.is-online, .agent-pill.is-online .agent-dot { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); }
+
+.dialog-wide-ish { width: min(680px, calc(100vw - 32px)); }
+.picked-list { list-style: none; margin: 14px 0 6px; padding: 0; display: grid; gap: 12px; max-height: 42dvh; overflow: auto; }
+.picked-list li { display: grid; gap: 5px; }
+.picked-name { overflow-wrap: anywhere; }
+
+.agent-list { list-style: none; margin: 8px 0 14px; padding: 0; display: grid; gap: 10px; }
+.agent-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.agent-form { border-top: 1px solid var(--border); padding-top: 14px; }
+.token-box { border-left: 6px solid var(--amber); }
+.env-block {
+  margin: 10px 0 14px; padding: 12px 14px; background: var(--topbar); color: var(--topbar-text); border-radius: 10px;
+  font: 13px/1.5 ui-monospace, 'Cascadia Mono', Consolas, monospace; overflow-x: auto; white-space: pre; user-select: all;
+}
+.howto { padding-left: 20px; display: grid; gap: 6px; }
+code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; font-size: 0.92em; }

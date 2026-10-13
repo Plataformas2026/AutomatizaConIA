@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
 import { getSessionContext } from '@/lib/auth';
 import { DrivePicker } from '@/components/DrivePicker';
-import { LocalUpload } from '@/components/intake/LocalUpload';
+import { LocalFilePanel } from '@/components/local/LocalFilePanel';
+import { loadAgentCards } from '@/lib/agents/load';
 import { FileList } from '@/components/files/FileList';
 import { ProjectGrid } from '@/components/projects/ProjectGrid';
 import { FILE_COLUMNS, toFileItem, type FileRowDb } from '@/lib/projects/format';
@@ -44,6 +45,8 @@ export default async function DashboardPage({
     fileCount: counts.get(p.id) ?? 0,
   }));
 
+  const agents = await loadAgentCards(ctx);
+
   const active = connections?.find((c) => c.status === 'active');
   const needsReconnect = !active && (connections?.length ?? 0) > 0;
 
@@ -80,14 +83,7 @@ export default async function DashboardPage({
       </div>
 
       <div className="panel connect connect-local">
-        {active ? (
-          <LocalUpload />
-        ) : (
-          <div>
-            <strong>Subir desde tu ordenador</strong>
-            <div className="muted">Conecta primero tu Google Drive: allí se guarda la copia que vigilamos.</div>
-          </div>
-        )}
+        <LocalFilePanel agents={agents} />
       </div>
 
       <h2>Proyectos</h2>

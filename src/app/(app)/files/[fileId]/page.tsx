@@ -3,6 +3,8 @@ import { notFound, redirect } from 'next/navigation';
 import { getSessionContext } from '@/lib/auth';
 import { FileWorkspace } from '@/components/FileWorkspace';
 import { FileTypeIcon } from '@/components/Icons';
+import { LocalFileInfo } from '@/components/local/LocalFileInfo';
+import { ONLINE_WINDOW_MS } from '@/lib/agents/types';
 
 export default async function FilePage({ params }: { params: Promise<{ fileId: string }> }) {
   const { fileId } = await params;
@@ -11,10 +13,25 @@ export default async function FilePage({ params }: { params: Promise<{ fileId: s
 
   const { data: file } = await ctx.supabase
     .from('shared_files_metadata')
-    .select('id, name, mime_type, status, last_error')
+    .select('id, name, mime_type, status, last_error, source, local_path, agent_id')
     .eq('id', fileId)
     .maybeSingle();
   if (!file) notFound();
+
+  let agent: { name: string; online: boolean } | null = null;
+  if (file.source === 'local' && file.agent_id) {
+    const { data } = await ctx.supabase
+      .from('local_agents')
+      .select('name, last_seen_at')
+      .eq('id', file.agent_id)
+      .maybeSingle();
+    if (data) {
+      agent = {
+        name: data.name,
+        online: !!data.last_seen_at && Date.now() - new Date(data.last_seen_at).getTime() < ONLINE_WINDOW_MS,
+      };
+    }
+  }
 
   const { data: rules } = await ctx.supabase
     .from('rules')
@@ -32,9 +49,18 @@ export default async function FilePage({ params }: { params: Promise<{ fileId: s
         <h1>{file.name}</h1>
       </div>
       <p className="sub">
-        Define cuándo avisarte. Las condiciones se evalúan al instante cada vez que el archivo cambia en tu Drive.
+        Define cuándo avisarte. Las condiciones se evalúan al instante cada vez que el archivo cambia{file.source === 'local' ? ' en tu ordenador' : ' en tu Drive'}.
       </p>
       {file.last_error && <div className="notice notice-error">{file.last_error}</div>}
+      {file.source === 'local' && (
+        <LocalFileInfo
+          fileId={file.id}
+          fileName={file.name}
+          initialPath={file.local_path}
+          agentName={agent?.name ?? null}
+          agentOnline={agent?.online ?? false}
+        />
+      )}
       <FileWorkspace
         fileId={file.id}
         fileName={file.name}

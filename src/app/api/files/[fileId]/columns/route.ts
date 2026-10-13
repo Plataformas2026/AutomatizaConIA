@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { decrypt } from '@/lib/crypto';
 import { getAccessToken } from '@/lib/google/oauth';
 import { downloadFile, FileTooLargeError, getFileMeta, GoogleApiError } from '@/lib/google/drive';
-import { parseMimeFor, parseWorkbook, type SheetSelection } from '@/lib/parsing/parse';
+import { parseMimeFor, parseWorkbook, resolveSheets, type SheetSelection } from '@/lib/parsing/parse';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -26,10 +26,38 @@ export async function GET(_req: Request, { params }: { params: Promise<{ fileId:
 
   const { data: file } = await ctx.supabase
     .from('shared_files_metadata')
-    .select('id, google_token_id, drive_file_id, sheet_mode, sheet_names')
+    .select('id, source, local_structure, google_token_id, drive_file_id, sheet_mode, sheet_names')
     .eq('id', fileId)
     .maybeSingle();
   if (!file) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+
+  /* Archivo LOCAL: la estructura (solo nombres) la envía el agente del PC; aquí no se lee ningún archivo. */
+  if (file.source === 'local') {
+    const st = file.local_structure as { sheets?: unknown; tables?: unknown } | null;
+    const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+    if (!st || !Array.isArray(st.tables)) return NextResponse.json({ error: 'waiting_agent' }, { status: 409 });
+
+    const available = strings(st.sheets);
+    const sel: SheetSelection = {
+      mode: (file.sheet_mode ?? 'first') as SheetSelection['mode'],
+      names: (file.sheet_names ?? []) as string[],
+    };
+    const active = resolveSheets(available, sel);
+    const columnMap = new Map<string, string[]>();
+    for (const t of st.tables as { sheet?: string | null; columns?: unknown }[]) {
+      const sheet = typeof t.sheet === 'string' ? t.sheet : null;
+      if (sheet !== null && !active.includes(sheet)) continue;
+      for (const header of strings(t.columns)) {
+        const list = columnMap.get(header) ?? [];
+        if (sheet) list.push(sheet);
+        columnMap.set(header, list);
+      }
+    }
+    return NextResponse.json(
+      { sheets: available, selection: sel, active, columns: Array.from(columnMap, ([name, sheets]) => ({ name, sheets })) },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
 
   const admin = createAdminClient();
   const { data: token } = await admin

@@ -9,7 +9,7 @@ export default async function ModelsPage() {
   if (!ctx) redirect('/login');
 
   const [{ data: files }, { data: rows }] = await Promise.all([
-    ctx.supabase.from('shared_files_metadata').select('id, name, mime_type').order('created_at', { ascending: false }),
+    ctx.supabase.from('shared_files_metadata').select('id, name, mime_type').eq('source', 'drive').order('created_at', { ascending: false }),
     ctx.supabase
       .from('ml_reports')
       .select('id, file_id, title, config, summary, created_at')

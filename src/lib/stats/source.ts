@@ -18,10 +18,12 @@ export async function openFile(ctx: SessionContext, fileId: string): Promise<Ope
   // RLS: solo aparece si el archivo es de la empresa del usuario.
   const { data: file } = await ctx.supabase
     .from('shared_files_metadata')
-    .select('id, google_token_id, drive_file_id')
+    .select('id, source, google_token_id, drive_file_id')
     .eq('id', fileId)
     .maybeSingle();
   if (!file) throw new StatsError('file_not_found', 404);
+  // Los archivos locales no salen del PC: el servidor no puede leerlos.
+  if (file.source === 'local') throw new StatsError('local_file', 422);
 
   const { data: token } = await createAdminClient()
     .from('google_tokens')

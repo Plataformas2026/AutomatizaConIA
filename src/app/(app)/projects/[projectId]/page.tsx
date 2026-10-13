@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getSessionContext } from '@/lib/auth';
 import { DrivePicker } from '@/components/DrivePicker';
-import { LocalUpload } from '@/components/intake/LocalUpload';
+import { LocalFilePanel } from '@/components/local/LocalFilePanel';
+import { loadAgentCards } from '@/lib/agents/load';
 import { FileList } from '@/components/files/FileList';
 import { ProjectCover } from '@/components/projects/ProjectGrid';
 import { ProjectToolbar } from '@/components/projects/ProjectToolbar';
@@ -28,6 +29,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
   ]);
   if (!project) notFound();
 
+  const agents = await loadAgentCards(ctx);
   const items = ((files ?? []) as FileRowDb[]).map(toFileItem);
   const active = connections?.some((c) => c.status === 'active');
 
@@ -51,23 +53,21 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
       </div>
 
       {active ? (
-        <>
-          <div className="panel connect row wrap">
-            <div className="grow">
-              <strong>Añadir a este proyecto</strong>
-              <div className="muted">Los archivos que añadas aquí se guardan directamente dentro del proyecto.</div>
-            </div>
-            <DrivePicker label="Añadir archivos de Google Drive" projectId={project.id} />
+        <div className="panel connect row wrap">
+          <div className="grow">
+            <strong>Añadir a este proyecto</strong>
+            <div className="muted">Los archivos que añadas aquí se guardan directamente dentro del proyecto.</div>
           </div>
-          <div className="panel connect connect-local">
-            <LocalUpload projectId={project.id} />
-          </div>
-        </>
+          <DrivePicker label="Añadir archivos de Google Drive" projectId={project.id} />
+        </div>
       ) : (
         <div className="notice">
-          Conecta tu Google Drive desde el <Link href="/dashboard">Dashboard</Link> para añadir archivos.
+          Conecta tu Google Drive desde el <Link href="/dashboard">Dashboard</Link> para añadir archivos de Drive.
         </div>
       )}
+      <div className="panel connect connect-local">
+        <LocalFilePanel agents={agents} projectId={project.id} />
+      </div>
 
       <h2>Archivos del proyecto</h2>
       <FileList

@@ -12,6 +12,7 @@ export default async function StatsPage() {
     ctx.supabase
       .from('shared_files_metadata')
       .select('id, name, mime_type')
+      .eq('source', 'drive') // los archivos locales no salen del PC
       .order('created_at', { ascending: false }),
     ctx.supabase
       .from('stats_charts')

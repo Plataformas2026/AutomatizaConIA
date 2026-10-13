@@ -34,6 +34,8 @@ export interface FileItem {
   checkedLabel: string;
   lastError: string | null;
   projectId: string | null;
+  /** 'local' = archivo del ordenador, vigilado por el agente (no está en Drive). */
+  source: 'drive' | 'local';
 }
 
 /** Tipo MIME del arrastre de archivos (dashboard → tarjeta de proyecto). */

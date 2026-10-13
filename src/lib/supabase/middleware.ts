@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
-const PROTECTED_PREFIXES = ['/dashboard', '/files', '/alerts', '/projects'];
+const PROTECTED_PREFIXES = ['/dashboard', '/files', '/alerts', '/projects', '/agent'];
 
 /** Refresca la sesión y redirige a /login las páginas privadas.
  *  Las rutas /api hacen su propia comprobación (el webhook NO lleva sesión). */

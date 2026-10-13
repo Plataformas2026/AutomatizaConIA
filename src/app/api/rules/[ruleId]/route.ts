@@ -28,14 +28,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ruleId
   // Si cambia lo que la regla evalúa (o se reactiva), se reinicia su huella
   // para que pueda volver a alertar, y se reevalúa ahora.
   if (patch.condition || patch.actions || patch.enabled === true) {
-    await createAdminClient().from('rules').update({ last_fingerprint: null }).eq('id', rule.id);
-    after(async () => {
-      try {
-        await processFile(rule.file_id, { force: true });
-      } catch {
-        /* ver last_error del archivo */
-      }
-    });
+    await createAdminClient()
+      .from('rules')
+      .update({ last_fingerprint: null, last_fingerprints: {} })
+      .eq('id', rule.id);
+    const { data: owner } = await createAdminClient()
+      .from('shared_files_metadata')
+      .select('source')
+      .eq('id', rule.file_id)
+      .maybeSingle();
+    // Archivo local: lo reevalúa el agente del PC en su próxima sincronización.
+    if (owner?.source !== 'local') {
+      after(async () => {
+        try {
+          await processFile(rule.file_id, { force: true });
+        } catch {
+          /* ver last_error del archivo */
+        }
+      });
+    }
   }
   return NextResponse.json(rule);
 }

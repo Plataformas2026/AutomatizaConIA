@@ -177,3 +177,10 @@ La pestaña **Estadísticas** (`/stats`) permite montar un panel de gráficas pr
 
 - **Zero-storage**: los datos se leen de Drive al vuelo, se agregan en memoria y solo viajan al navegador cifras ya agregadas. En la base de datos solo se guarda la configuración de cada gráfica (`stats_charts`, migración `0004_stats_charts.sql`), con RLS por usuario.
 - API: `POST /api/stats/query` (datos agregados), `GET /api/stats/structure` (hojas y columnas), `POST/PATCH/DELETE /api/stats/charts` (configuración).
+
+## Archivos locales (agente en tu PC)
+
+Además de Google Drive, se pueden vigilar archivos Excel/CSV de tu ordenador **sin subirlos a ninguna nube**:
+un agente (Python + Watchdog, carpeta `agent/`) los lee en local, aplica las reglas y envía a Supabase solo los avisos
+(texto de la regla + nº de fila) y los nombres de hojas/columnas. Migración: `0007_local_agent.sql`. Guía completa:
+[`agent/README.md`](agent/README.md). Limitación actual: *Estadísticas* e *Informes y Modelos IA* solo leen archivos de Drive.

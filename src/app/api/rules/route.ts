@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   // RLS garantiza que el archivo es de la empresa del usuario.
   const { data: file } = await ctx.supabase
     .from('shared_files_metadata')
-    .select('id, company_id')
+    .select('id, company_id, source')
     .eq('id', fileId)
     .maybeSingle();
   if (!file) return NextResponse.json({ error: 'file_not_found' }, { status: 404 });
@@ -41,13 +41,16 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: 'db_error' }, { status: 500 });
 
   // force: evalúa ya, aunque la versión del archivo no haya cambiado.
-  after(async () => {
-    try {
-      await processFile(file.id, { force: true });
-    } catch {
-      /* el error queda reflejado en shared_files_metadata.last_error */
-    }
-  });
+  // Archivo local: lo evalúa el agente del PC en su próxima sincronización (≤ 1 min).
+  if (file.source !== 'local') {
+    after(async () => {
+      try {
+        await processFile(file.id, { force: true });
+      } catch {
+        /* el error queda reflejado en shared_files_metadata.last_error */
+      }
+    });
+  }
 
   return NextResponse.json(rule, { status: 201 });
 }

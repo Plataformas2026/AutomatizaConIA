@@ -8,7 +8,7 @@ export function FileActions({ fileId }: { fileId: string }) {
   const [busy, setBusy] = useState(false);
 
   async function remove() {
-    if (!confirm('¿Dejar de vigilar este archivo? Se borrarán sus reglas. Tu archivo en Drive no se toca.')) return;
+    if (!confirm('¿Dejar de vigilar este archivo? Se borrarán sus reglas. Tu archivo original (en Drive o en tu ordenador) no se toca.')) return;
     setBusy(true);
     await fetch(`/api/files/${fileId}`, { method: 'DELETE' });
     setBusy(false);

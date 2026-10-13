@@ -10,7 +10,7 @@ export function NavTabs() {
   const pathname = usePathname();
   const { unread } = useAlerts();
 
-  const onDashboard = pathname === '/dashboard' || pathname.startsWith('/files') || pathname.startsWith('/projects');
+  const onDashboard = pathname === '/dashboard' || pathname.startsWith('/files') || pathname.startsWith('/projects') || pathname.startsWith('/agent');
   const onAlerts = pathname.startsWith('/alerts');
   const onStats = pathname.startsWith('/stats');
   const onModels = pathname.startsWith('/models');

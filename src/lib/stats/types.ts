@@ -156,6 +156,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   file_not_found: 'El archivo ya no está compartido.',
   file_not_accessible: 'No tenemos acceso a este archivo en tu Drive.',
   file_too_large: 'El archivo es demasiado grande para leerlo.',
+  local_file: 'Este archivo está en tu ordenador y no sale de él: aquí solo se pueden analizar archivos de Google Drive.',
   google_not_connected: 'Tu Google Drive está desconectado. Reconéctalo desde el Dashboard.',
   google_error: 'Google no respondió. Inténtalo de nuevo en unos segundos.',
   sheet_not_found: 'La hoja elegida ya no existe en el archivo.',

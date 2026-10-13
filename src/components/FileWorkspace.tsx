@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { SheetSelection } from '@/lib/parsing/parse';
 import { SheetPicker, isValidSelection } from './SheetPicker';
@@ -17,6 +17,8 @@ const LOAD_ERRORS: Record<string, string> = {
   file_too_large: 'El archivo es demasiado grande para leerlo.',
   file_not_accessible: 'Ya no tenemos acceso a este archivo. Vuelve a elegirlo desde «Añadir archivo».',
   google_not_connected: 'Tu Google Drive está desconectado. Reconéctalo desde el panel.',
+  waiting_agent:
+    'Esperando al agente de tu ordenador: en cuanto lea el archivo (menos de un minuto) aparecerán aquí sus hojas y columnas. Comprueba que el agente está en marcha.',
 };
 
 function initialDraft(s: Structure): SheetSelection {
@@ -37,6 +39,7 @@ export function FileWorkspace({
   initialRules: RuleRow[];
 }) {
   const router = useRouter();
+  const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [structure, setStructure] = useState<Structure | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<SheetSelection>({ mode: 'selected', names: [] });
@@ -51,6 +54,8 @@ export function FileWorkspace({
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setLoadError(LOAD_ERRORS[body.error] ?? 'No se pudo leer el archivo para listar sus hojas y columnas.');
+        // Archivo local recién añadido: el agente tarda unos segundos en enviar la estructura.
+        if (body.error === 'waiting_agent') retry.current = setTimeout(() => void load(), 8000);
         return;
       }
       setLoadError(null);
@@ -64,6 +69,9 @@ export function FileWorkspace({
 
   useEffect(() => {
     void load();
+    return () => {
+      if (retry.current) clearTimeout(retry.current);
+    };
   }, [load]);
 
   async function saveSheets() {

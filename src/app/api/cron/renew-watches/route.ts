@@ -24,6 +24,7 @@ async function handle(req: Request) {
     .from('shared_files_metadata')
     .select('id')
     .eq('status', 'active')
+    .eq('source', 'drive') // los archivos locales los vigila el agente del PC
     .or(`watch_expires_at.is.null,watch_expires_at.lt.${threshold}`)
     .limit(200);
 

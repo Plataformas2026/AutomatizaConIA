@@ -138,6 +138,7 @@ export function FileList({ files, projects, currentProjectId, emptyText }: Props
                 {f.name}
               </Link>{' '}
               <span className={`pill ${f.status}`}>{STATUS_LABEL[f.status] ?? f.status}</span>
+              {f.source === 'local' && <span className="tag tag-local">En tu ordenador</span>}
               {f.sheetsLabel && <span className="tag tag-sheet">{f.sheetsLabel}</span>}
               <div className="muted">{f.checkedLabel}</div>
               {f.lastError && <div className="err">{f.lastError}</div>}
