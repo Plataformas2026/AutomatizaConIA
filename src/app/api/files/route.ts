@@ -21,6 +21,8 @@ const bodySchema = z
     // Hojas a vigilar (solo aplica a Excel / Google Sheets). Por defecto: la primera.
     sheetMode: sheetModeSchema.default('first'),
     sheetNames: sheetNamesSchema.default([]),
+    // Proyecto de destino (opcional). Sin él, el archivo queda suelto.
+    projectId: z.string().uuid().nullable().optional(),
   })
   .superRefine(checkSheetSelection);
 
@@ -31,6 +33,12 @@ export async function POST(req: Request) {
 
   const body = bodySchema.safeParse(await req.json().catch(() => null));
   if (!body.success) return NextResponse.json({ error: 'invalid_body' }, { status: 400 });
+
+  // El proyecto de destino debe ser de MI empresa (RLS lo filtra).
+  if (body.data.projectId) {
+    const { data: project } = await ctx.supabase.from('projects').select('id').eq('id', body.data.projectId).maybeSingle();
+    if (!project) return NextResponse.json({ error: 'project_not_found' }, { status: 404 });
+  }
 
   const admin = createAdminClient();
   const { data: token } = await admin
@@ -71,6 +79,7 @@ export async function POST(req: Request) {
       status: 'active',
       last_version: meta.version, // base de referencia: solo reaccionamos a cambios posteriores
       created_by: ctx.user.id,
+      project_id: body.data.projectId ?? null,
       // Un CSV no tiene hojas: siempre "first".
       ...(meta.mimeType === 'text/csv'
         ? { sheet_mode: 'first', sheet_names: [] }

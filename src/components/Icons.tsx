@@ -170,3 +170,39 @@ export function IconPrint(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconUpload(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 16V4M7 9l5-5 5 5" />
+      <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+    </Svg>
+  );
+}
+
+export function IconFolder(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </Svg>
+  );
+}
+
+export function IconMove(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 12h13M13 7l5 5-5 5" />
+      <path d="M20 5v14" />
+    </Svg>
+  );
+}
+
+export function IconImage(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3" y="4" width="18" height="16" rx="3" />
+      <circle cx="9" cy="10" r="1.8" />
+      <path d="M21 16l-5-5-8 8" />
+    </Svg>
+  );
+}

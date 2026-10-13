@@ -1,9 +1,11 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSessionContext } from '@/lib/auth';
 import { DrivePicker } from '@/components/DrivePicker';
-import { FileActions } from '@/components/FileActions';
-import { FileTypeIcon } from '@/components/Icons';
+import { LocalUpload } from '@/components/intake/LocalUpload';
+import { FileList } from '@/components/files/FileList';
+import { ProjectGrid } from '@/components/projects/ProjectGrid';
+import { FILE_COLUMNS, toFileItem, type FileRowDb } from '@/lib/projects/format';
+import type { ProjectCard } from '@/lib/projects/types';
 
 const NOTICES: Record<string, string> = {
   connected: 'Google Drive conectado. Ahora elige un archivo.',
@@ -16,21 +18,6 @@ const NOTICES: Record<string, string> = {
   no_code: 'Google no devolvió el código de autorización.',
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  active: 'Activo',
-  paused: 'Pausado',
-  error: 'Con error',
-  revoked: 'Reconectar',
-};
-
-function sheetsLabel(mode: string, names: string[] | null): string {
-  if (mode === 'all') return 'Todas las hojas';
-  if (mode === 'selected' && names?.length) {
-    return names.length === 1 ? `Hoja «${names[0]}»` : `${names.length} hojas`;
-  }
-  return 'Primera hoja';
-}
-
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -40,13 +27,22 @@ export default async function DashboardPage({
   if (!ctx) redirect('/login');
   const { google } = await searchParams;
 
-  const [{ data: connections }, { data: files }] = await Promise.all([
+  const [{ data: connections }, { data: files }, { data: projectRows }] = await Promise.all([
     ctx.supabase.from('google_connections').select('id, google_email, status'),
-    ctx.supabase
-      .from('shared_files_metadata')
-      .select('id, name, mime_type, sheet_mode, sheet_names, status, last_checked_at, last_error, watch_expires_at')
-      .order('created_at', { ascending: false }),
+    ctx.supabase.from('shared_files_metadata').select(FILE_COLUMNS).order('created_at', { ascending: false }),
+    ctx.supabase.from('projects').select('id, name, cover').order('created_at', { ascending: true }),
   ]);
+
+  const allFiles = ((files ?? []) as FileRowDb[]).map(toFileItem);
+  const loose = allFiles.filter((f) => !f.projectId);
+  const counts = new Map<string, number>();
+  for (const f of allFiles) if (f.projectId) counts.set(f.projectId, (counts.get(f.projectId) ?? 0) + 1);
+  const projects: ProjectCard[] = (projectRows ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    cover: p.cover,
+    fileCount: counts.get(p.id) ?? 0,
+  }));
 
   const active = connections?.find((c) => c.status === 'active');
   const needsReconnect = !active && (connections?.length ?? 0) > 0;
@@ -75,7 +71,7 @@ export default async function DashboardPage({
           )}
         </div>
         {active ? (
-          <DrivePicker label="Añadir / compartir otro archivo" />
+          <DrivePicker label="Añadir archivos de Google Drive" />
         ) : (
           <a className="btn primary" href="/api/google/connect">
             {needsReconnect ? 'Reconectar Google Drive' : 'Conectar Google Drive'}
@@ -83,34 +79,34 @@ export default async function DashboardPage({
         )}
       </div>
 
-      <h2>Archivos compartidos</h2>
-      {!files?.length && <p className="muted">Todavía no has compartido ningún archivo.</p>}
-      <ul className="file-rows">
-        {files?.map((f) => (
-          <li className="file-row" key={f.id}>
-            <FileTypeIcon mime={f.mime_type} />
-            <div className="grow">
-              <Link href={`/files/${f.id}`} className="file-name">
-                {f.name}
-              </Link>{' '}
-              <span className={`pill ${f.status}`}>{STATUS_LABEL[f.status] ?? f.status}</span>
-              {f.mime_type !== 'text/csv' && (
-                <span className="tag tag-sheet">{sheetsLabel(f.sheet_mode, f.sheet_names)}</span>
-              )}
-              <div className="muted">
-                {f.last_checked_at
-                  ? `Última comprobación: ${new Date(f.last_checked_at).toLocaleString('es-ES')}`
-                  : 'Aún sin comprobar'}
-              </div>
-              {f.last_error && <div className="err">{f.last_error}</div>}
-            </div>
-            <Link className="btn" href={`/files/${f.id}`}>
-              Reglas y hojas
-            </Link>
-            <FileActions fileId={f.id} />
-          </li>
-        ))}
-      </ul>
+      <div className="panel connect connect-local">
+        {active ? (
+          <LocalUpload />
+        ) : (
+          <div>
+            <strong>Subir desde tu ordenador</strong>
+            <div className="muted">Conecta primero tu Google Drive: allí se guarda la copia que vigilamos.</div>
+          </div>
+        )}
+      </div>
+
+      <h2>Proyectos</h2>
+      <p className="muted section-hint">
+        Agrupa tus archivos por temas. Arrastra un archivo sobre un proyecto, o usa el botón «Mover».
+      </p>
+      <ProjectGrid projects={projects} />
+
+      <h2>{projects.length ? 'Archivos sin proyecto' : 'Archivos compartidos'}</h2>
+      <FileList
+        files={loose}
+        projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+        currentProjectId={null}
+        emptyText={
+          allFiles.length
+            ? 'Todos tus archivos están dentro de un proyecto.'
+            : 'Todavía no has compartido ningún archivo.'
+        }
+      />
     </>
   );
 }
