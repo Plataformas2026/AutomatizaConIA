@@ -11,7 +11,6 @@ import {
   CLUSTER_OPTIONS,
   DEPTH_OPTIONS,
   MAX_FEATURES,
-  MAX_REPORTS,
   ML_ERROR_MESSAGES,
   ML_TASK_INFO,
   mlConfigSchema,
@@ -26,12 +25,12 @@ import {
   type MlTask,
 } from '@/lib/ml/types';
 import { ERROR_MESSAGES, type StructureSheet } from '@/lib/stats/types';
-import { IconDownload, IconPrint, IconSave, IconSpark } from '../Icons';
+import { IconDownload, IconPrint, IconSpark } from '../Icons';
 import type { FileOption } from '../stats/ChartBuilder';
 import { downloadText, resultCsv, slug } from './exports';
+import { buildReportHtml } from './reportHtml';
 import { FeaturePicker, type Col } from './FeaturePicker';
 import { ResultPanel } from './ResultPanel';
-import { SavedReports, type SavedReport } from './SavedReports';
 
 const ALL_ERRORS = { ...ERROR_MESSAGES, ...ML_ERROR_MESSAGES };
 const KIND_LABEL = { number: 'número', date: 'fecha', text: 'texto' } as const;
@@ -98,10 +97,9 @@ function applyDefaults(d: Draft, cols: Col[]): Draft {
 
 interface Props {
   files: FileOption[];
-  initialReports: SavedReport[];
 }
 
-export function ModelStudio({ files, initialReports }: Props) {
+export function ModelStudio({ files }: Props) {
   const resultRef = useRef<HTMLDivElement>(null);
   const cache = useRef(new Map<string, StructureSheet[]>());
   const [draft, setDraft] = useState<Draft>(() => newDraft(files));
@@ -112,11 +110,6 @@ export function ModelStudio({ files, initialReports }: Props) {
   const [runError, setRunError] = useState<string | null>(null);
   const [result, setResult] = useState<MlResult | null>(null);
   const [resultConfig, setResultConfig] = useState<MlConfig | null>(null);
-  const [viewingSaved, setViewingSaved] = useState<string | null>(null);
-
-  const [reports, setReports] = useState<SavedReport[]>(initialReports);
-  const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   /* Hojas y columnas del archivo elegido. */
   useEffect(() => {
@@ -186,8 +179,6 @@ export function ModelStudio({ files, initialReports }: Props) {
   async function run(config: MlConfig) {
     setRunning(true);
     setRunError(null);
-    setSaveMsg(null);
-    setViewingSaved(null);
     try {
       const res = await fetch('/api/ml/run', {
         method: 'POST',
@@ -209,49 +200,15 @@ export function ModelStudio({ files, initialReports }: Props) {
     setRunning(false);
   }
 
-  async function save() {
+  /** El informe se construye aquí, en tu navegador, y se descarga. No se guarda en ningún sitio. */
+  function downloadReport() {
     if (!result || !resultConfig) return;
-    setSaving(true);
-    setSaveMsg(null);
-    const config = { ...resultConfig, title: draft.title.trim() || resultConfig.title };
-    const res = await fetch('/api/ml/reports', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ config, result }),
+    const html = buildReportHtml(result, {
+      title: reportTitle,
+      fileName: fileName(resultConfig.fileId),
+      sheet: resultConfig.sheet,
     });
-    const body = await res.json().catch(() => ({}));
-    setSaving(false);
-    if (!res.ok) {
-      setSaveMsg({
-        ok: false,
-        text: body.error === 'too_many_reports' ? `Has llegado al máximo de ${MAX_REPORTS} informes. Elimina alguno para guardar otro.` : 'No se pudo guardar el informe. Inténtalo de nuevo.',
-      });
-      return;
-    }
-    setReports((prev) => [body.report as SavedReport, ...prev]);
-    setSaveMsg({ ok: true, text: 'Informe guardado. Lo tienes abajo, en «Informes guardados».' });
-  }
-
-  function openSaved(r: SavedReport) {
-    setResult(r.summary);
-    setResultConfig(r.config);
-    setViewingSaved(r.id);
-    setRunError(null);
-    setSaveMsg(null);
-    requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-  }
-
-  function rerun(r: SavedReport) {
-    setDraft({ ...newDraft(files), ...r.config, title: r.config.title });
-    void run(r.config);
-  }
-
-  async function remove(r: SavedReport) {
-    if (!confirm(`¿Eliminar el informe «${r.title}»? Tu archivo en Drive no se toca.`)) return;
-    const res = await fetch(`/api/ml/reports/${r.id}`, { method: 'DELETE' });
-    if (!res.ok) return setSaveMsg({ ok: false, text: 'No se pudo eliminar el informe.' });
-    setReports((prev) => prev.filter((x) => x.id !== r.id));
-    if (viewingSaved === r.id) { setResult(null); setViewingSaved(null); }
+    downloadText(`${slug(reportTitle)}.html`, html, 'text/html;charset=utf-8');
   }
 
   const fileName = (id: string) => files.find((f) => f.id === id)?.name ?? 'Archivo';
@@ -449,24 +406,17 @@ export function ModelStudio({ files, initialReports }: Props) {
             </div>
             <div className="report-top">
               <div className="grow">
-                <h2>{viewingSaved ? (reports.find((r) => r.id === viewingSaved)?.title ?? reportTitle) : reportTitle}</h2>
+                <h2>{reportTitle}</h2>
                 <div className="chips">
                   <span className="tag tag-file">{fileName(resultConfig.fileId)}</span>
                   {resultConfig.sheet && <span className="tag tag-sheet">Hoja «{resultConfig.sheet}»</span>}
                 </div>
               </div>
               <div className="report-actions no-print">
-                {!viewingSaved && (
-                  <button className="btn primary" onClick={save} disabled={saving}>
-                    <IconSave size={16} />
-                    {saving ? 'Guardando…' : 'Guardar informe'}
-                  </button>
-                )}
-                {viewingSaved && (
-                  <button className="btn" onClick={() => { const r = reports.find((x) => x.id === viewingSaved); if (r) rerun(r); }}>
-                    Repetir análisis
-                  </button>
-                )}
+                <button className="btn primary" onClick={downloadReport}>
+                  <IconDownload size={16} />
+                  Descargar informe
+                </button>
                 <button className="btn" onClick={() => window.print()}>
                   <IconPrint size={16} />
                   Imprimir / PDF
@@ -479,16 +429,15 @@ export function ModelStudio({ files, initialReports }: Props) {
                 )}
               </div>
             </div>
-            {saveMsg && <p className={saveMsg.ok ? 'ok' : 'err'} role="status">{saveMsg.text}</p>}
-            <ResultPanel result={result} saved={!!viewingSaved} />
+            <p className="muted no-print">
+              Este informe se ha generado ahora mismo y solo existe en esta pantalla. Si quieres conservarlo, descárgalo: no
+              guardamos ninguna copia.
+            </p>
+            <ResultPanel result={result} />
           </section>
         )}
       </div>
 
-      <section className="no-print" aria-labelledby="saved-title">
-        <h2 id="saved-title">Informes guardados</h2>
-        <SavedReports reports={reports} fileName={fileName} openId={viewingSaved} onOpen={openSaved} onRerun={rerun} onDelete={remove} />
-      </section>
     </>
   );
 }

@@ -8,7 +8,19 @@ import { ChartCard, type ChartState } from './ChartCard';
 
 type Editing = SavedChart | 'new' | null;
 
-export function StatsBoard({ files, initialCharts }: { files: FileOption[]; initialCharts: SavedChart[] }) {
+export function StatsBoard({
+  files,
+  initialCharts,
+  projectId,
+  readOnly = false,
+}: {
+  files: FileOption[];
+  initialCharts: SavedChart[];
+  /** Proyecto que se está viendo (null = archivos sin proyecto). */
+  projectId: string | null;
+  /** Proyecto compartido contigo: puedes ver las gráficas, no cambiarlas. */
+  readOnly?: boolean;
+}) {
   const [charts, setCharts] = useState<SavedChart[]>(initialCharts);
   const [states, setStates] = useState<Record<string, ChartState>>({});
   const [editing, setEditing] = useState<Editing>(null);
@@ -91,10 +103,12 @@ export function StatsBoard({ files, initialCharts }: { files: FileOption[]; init
   return (
     <>
       <div className="stats-toolbar">
-        <button className="btn primary" onClick={() => setEditing('new')} disabled={noFiles || full}>
-          <IconPlus size={16} />
-          Nueva gráfica
-        </button>
+        {!readOnly && (
+          <button className="btn primary" onClick={() => setEditing('new')} disabled={noFiles || full}>
+            <IconPlus size={16} />
+            Nueva gráfica
+          </button>
+        )}
         {charts.length > 0 && (
           <button className="btn" onClick={refreshAll} disabled={refreshing}>
             <IconRefresh size={16} />
@@ -112,12 +126,26 @@ export function StatsBoard({ files, initialCharts }: { files: FileOption[]; init
           <span className="empty-icon">
             <IconChart size={28} />
           </span>
-          <strong>Primero comparte un archivo</strong>
-          <p className="muted">Ve al Dashboard, añade un Excel, un CSV o una Hoja de Google y vuelve aquí para crear gráficas.</p>
+          <strong>{readOnly ? 'Este proyecto no tiene archivos de Drive' : 'Primero añade un archivo a este proyecto'}</strong>
+          <p className="muted">
+            {readOnly
+              ? 'Las estadísticas se crean sobre archivos de Google Drive.'
+              : 'Ve al Dashboard, añade un Excel, un CSV o una Hoja de Google (o muévelo a este proyecto) y vuelve aquí para crear gráficas.'}
+          </p>
         </div>
       )}
 
-      {!noFiles && charts.length === 0 && (
+      {readOnly && !noFiles && charts.length === 0 && (
+        <div className="empty">
+          <span className="empty-icon">
+            <IconChart size={28} />
+          </span>
+          <strong>Todavía no hay gráficas en este proyecto</strong>
+          <p className="muted">Cuando quien comparte el proyecto cree alguna, aparecerá aquí.</p>
+        </div>
+      )}
+
+      {!readOnly && !noFiles && charts.length === 0 && (
         <div className="empty">
           <span className="empty-icon">
             <IconChart size={28} />
@@ -140,8 +168,8 @@ export function StatsBoard({ files, initialCharts }: { files: FileOption[]; init
             config={chart.config}
             fileName={fileName(chart.config.fileId)}
             state={states[chart.id] ?? { status: 'loading' }}
-            onEdit={() => setEditing(chart)}
-            onDelete={() => remove(chart)}
+            onEdit={readOnly ? undefined : () => setEditing(chart)}
+            onDelete={readOnly ? undefined : () => remove(chart)}
           />
         ))}
       </div>
@@ -150,6 +178,7 @@ export function StatsBoard({ files, initialCharts }: { files: FileOption[]; init
         <ChartBuilder
           key={editing === 'new' ? 'new' : editing.id}
           files={files}
+          projectId={projectId}
           initial={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)}
           onSaved={onSaved}

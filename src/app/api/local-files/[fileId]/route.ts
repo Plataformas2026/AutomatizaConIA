@@ -22,6 +22,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ fileId
     .from('shared_files_metadata')
     .select('id, name, source')
     .eq('id', fileId)
+    .eq('company_id', ctx.companyId)
     .maybeSingle();
   if (!file || file.source !== 'local') return NextResponse.json({ error: 'not_found' }, { status: 404 });
 

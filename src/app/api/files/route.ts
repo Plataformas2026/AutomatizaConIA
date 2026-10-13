@@ -36,7 +36,7 @@ export async function POST(req: Request) {
 
   // El proyecto de destino debe ser de MI empresa (RLS lo filtra).
   if (body.data.projectId) {
-    const { data: project } = await ctx.supabase.from('projects').select('id').eq('id', body.data.projectId).maybeSingle();
+    const { data: project } = await ctx.supabase.from('projects').select('id').eq('id', body.data.projectId).eq('company_id', ctx.companyId).maybeSingle();
     if (!project) return NextResponse.json({ error: 'project_not_found' }, { status: 404 });
   }
 

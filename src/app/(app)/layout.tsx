@@ -3,6 +3,7 @@ import { getSessionContext } from '@/lib/auth';
 import { AlertsProvider } from '@/components/AlertsProvider';
 import { NavTabs } from '@/components/NavTabs';
 import { BrandMark } from '@/components/Icons';
+import '@/styles/sharing.css';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getSessionContext();
@@ -11,6 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { count } = await ctx.supabase
     .from('alerts')
     .select('id', { count: 'exact', head: true })
+    .eq('company_id', ctx.companyId) // las alertas de proyectos compartidos conmigo no cuentan como pendientes
     .eq('status', 'open');
 
   return (

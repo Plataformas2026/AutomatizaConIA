@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const { config } = body.data;
 
   try {
-    const file = await openFile(ctx, config.fileId);
+    const file = await openFile(ctx, config.fileId, { ownOnly: true });
     const table = tableFor(file, config.sheet);
     const result = runMl(table, config);
     return NextResponse.json({ result }, { headers: { 'Cache-Control': 'no-store' } });

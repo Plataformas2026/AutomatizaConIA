@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
+import email_render
+
 OPERATORS = (
     "gt", "gte", "lt", "lte", "eq", "neq",
     "contains", "not_contains", "starts_with", "is_empty", "is_not_empty",
@@ -208,6 +210,7 @@ class Rule:
     right_type: Optional[str]  # 'column' | 'value' | None
     right: Any
     actions: list[dict]
+    emails: list[dict] = field(default_factory=list)  # acciones «correo» (el envío lo decide la web o este agente)
 
 
 def validate_rule(raw: dict) -> Optional[Rule]:
@@ -238,8 +241,23 @@ def validate_rule(raw: dict) -> Optional[Rule]:
             else:
                 return None
 
-        actions = []
+        actions: list[dict] = []
+        emails: list[dict] = []
+        total = 0
         for a in raw.get("actions") or []:
+            total += 1
+            if a.get("type") == "email":
+                to, subject, body = a.get("to"), a.get("subject"), a.get("body")
+                sender, mode = a.get("from") or "", a.get("mode", "per_row")
+                if not all(isinstance(x, str) for x in (to, subject, body, sender)):
+                    return None
+                to, subject, body, sender = to.strip(), subject.strip(), body.strip(), sender.strip()
+                if not (1 <= len(to) <= 500 and 1 <= len(subject) <= 200 and 1 <= len(body) <= 4000 and len(sender) <= 254):
+                    return None
+                if mode not in ("per_row", "summary"):
+                    return None
+                emails.append({"from": sender, "to": to, "subject": subject, "body": body, "mode": mode})
+                continue
             if a.get("type") != "alert" or not isinstance(a.get("message"), str):
                 return None
             msg = a["message"].strip()
@@ -247,9 +265,9 @@ def validate_rule(raw: dict) -> Optional[Rule]:
                 return None
             sev = a.get("severity", "info")
             actions.append({"message": msg, "severity": sev if sev in SEVERITIES else "info"})
-        if len(actions) > 5:
+        if total > 5:
             return None
-        return Rule(str(raw["id"]), str(raw["name"]), column, op, right_type, right, actions)
+        return Rule(str(raw["id"]), str(raw["name"]), column, op, right_type, right, actions, emails)
     except (KeyError, TypeError, AttributeError):
         return None
 
@@ -329,28 +347,54 @@ def resolve_sheets(available: list[str], mode: str, names: list[str]) -> list[st
     return chosen[:50]
 
 
-def build_alerts(rule: Rule, evaluation: MultiSheetEvaluation, previous: dict[str, str],
-                 file_name: str) -> tuple[dict[str, str], list[dict]]:
-    """Una huella por hoja: solo se alerta por las hojas cuyo conjunto de filas cambió."""
+def build_outputs(rule: Rule, evaluation: MultiSheetEvaluation, previous: dict[str, str], file_name: str,
+                  sheets: Optional[list[SheetTable]] = None) -> tuple[dict[str, str], list[dict], list[dict]]:
+    """Una huella por hoja: solo se avisa por las hojas cuyo conjunto de filas cambió.
+    Devuelve (huellas, alertas, correos ya redactados)."""
     nxt: dict[str, str] = {}
     alerts: list[dict] = []
+    emails: list[dict] = []
+    tables = {s.sheet_name: s.table for s in (sheets or [])}
+    columns: list[str] = []
+    for em in rule.emails:
+        columns += [c for c in email_render.referenced_columns([em["to"], em["subject"], em["body"]]) if c not in columns]
+
     for sheet in evaluation.sheets:
         key = sheet.sheet_name or ""
         fp = fingerprint(rule.id, key, sheet.matched_rows) if sheet.matched_count > 0 else None
         if not fp:
             continue
         nxt[key] = fp
-        if fp != previous.get(key):
-            refs = sheet.matched_rows[:200]
-            for action in rule.actions:
-                alerts.append({
-                    "sheet": sheet.sheet_name,
-                    "message": render_message(
-                        action["message"], count=sheet.matched_count, rows=refs, column=rule.left,
-                        sheet=sheet.sheet_name, file_name=file_name, rule_name=rule.name,
-                    ),
-                    "severity": action["severity"],
-                    "count": sheet.matched_count,
-                    "rows": refs,
-                })
+        if fp == previous.get(key):
+            continue
+        refs = sheet.matched_rows[:200]
+        for action in rule.actions:
+            alerts.append({
+                "sheet": sheet.sheet_name,
+                "message": render_message(
+                    action["message"], count=sheet.matched_count, rows=refs, column=rule.left,
+                    sheet=sheet.sheet_name, file_name=file_name, rule_name=rule.name,
+                ),
+                "severity": action["severity"],
+                "count": sheet.matched_count,
+                "rows": refs,
+            })
+        table = tables.get(sheet.sheet_name)
+        if rule.emails and table is not None:
+            wanted = set(refs)
+            matched = [
+                {"rowNumber": r.number, "values": {c: r.values.get(c) for c in columns}}
+                for r in table.rows if r.number in wanted
+            ]
+            meta = {"fileName": file_name, "ruleName": rule.name, "sheetName": sheet.sheet_name,
+                    "columnName": rule.left, "count": sheet.matched_count}
+            for em in rule.emails:
+                emails += email_render.build_emails(em, rule.id, meta, matched, table.headers)
+    return nxt, alerts, emails
+
+
+def build_alerts(rule: Rule, evaluation: MultiSheetEvaluation, previous: dict[str, str],
+                 file_name: str) -> tuple[dict[str, str], list[dict]]:
+    """Solo huellas y alertas (compatibilidad con las pruebas del motor)."""
+    nxt, alerts, _ = build_outputs(rule, evaluation, previous, file_name)
     return nxt, alerts

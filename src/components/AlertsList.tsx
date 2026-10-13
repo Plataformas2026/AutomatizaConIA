@@ -3,12 +3,20 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAlerts, type AlertRow } from './AlertsProvider';
-import { IconBell, IconCheck, IconTable } from './Icons';
+import { IconBell, IconCheck, IconFolder, IconTable } from './Icons';
 
 const SEVERITY_LABEL = { info: 'Informativa', warning: 'Aviso', critical: 'Crítica' } as const;
 
-export function AlertsList({ initial }: { initial: AlertRow[] }) {
+export function AlertsList({
+  initial,
+  projects = [],
+}: {
+  initial: AlertRow[];
+  /** Proyectos con alertas (propios y compartidos conmigo), para filtrar. */
+  projects?: { id: string; name: string }[];
+}) {
   const [alerts, setAlerts] = useState<AlertRow[]>(initial);
+  const [filter, setFilter] = useState<string>('all');
   const { adjustUnread, refreshUnread, onNewAlert, unread } = useAlerts();
   const [error, setError] = useState<string | null>(null);
 
@@ -49,9 +57,13 @@ export function AlertsList({ initial }: { initial: AlertRow[] }) {
       setError('No se pudieron marcar las alertas. Inténtalo de nuevo.');
       return;
     }
-    setAlerts((prev) => prev.map((a) => (a.status === 'open' ? { ...a, status: 'read' } : a)));
+    setAlerts((prev) => prev.map((a) => (a.status === 'open' && !a.shared ? { ...a, status: 'read' } : a)));
     await refreshUnread();
   }
+
+  const visible = alerts.filter((a) =>
+    filter === 'all' ? true : filter === 'none' ? !a.project_id : a.project_id === filter,
+  );
 
   if (!alerts.length) {
     return (
@@ -79,9 +91,24 @@ export function AlertsList({ initial }: { initial: AlertRow[] }) {
         )}
       </div>
       {error && <p className="err">{error}</p>}
+      {projects.length > 0 && (
+        <label className="scope-select">
+          <span className="field-title">Proyecto</span>
+          <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+            <option value="all">Todos los proyectos</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+            <option value="none">Sin proyecto</option>
+          </select>
+        </label>
+      )}
+      {visible.length === 0 && <p className="muted">No hay alertas en este proyecto.</p>}
 
       <ul className="alert-list">
-        {alerts.map((a) => (
+        {visible.map((a) => (
           <li key={a.id} className={`alert-item sev-${a.severity} ${a.status === 'read' ? 'is-read' : 'is-open'}`}>
             <span className="alert-sev" title={SEVERITY_LABEL[a.severity]}>
               <IconBell size={18} />
@@ -94,6 +121,13 @@ export function AlertsList({ initial }: { initial: AlertRow[] }) {
                   {a.file_name}
                 </span>
                 {a.sheet_name && <span className="tag tag-sheet">Hoja «{a.sheet_name}»</span>}
+                {(a.project_name ?? projects.find((p) => p.id === a.project_id)?.name) && (
+                  <span className="tag tag-project">
+                    <IconFolder size={14} />
+                    {a.project_name ?? projects.find((p) => p.id === a.project_id)?.name}
+                  </span>
+                )}
+                {a.shared && <span className="tag tag-count">Compartida contigo</span>}
                 <span className="tag tag-rule">Regla «{a.rule_name}»</span>
                 <span className="tag tag-count">
                   {a.matched_count} fila{a.matched_count === 1 ? '' : 's'}
@@ -106,14 +140,16 @@ export function AlertsList({ initial }: { initial: AlertRow[] }) {
               </time>
             </div>
             <div className="alert-actions">
-              {a.status === 'open' && (
+              {!a.shared && a.status === 'open' && (
                 <button className="btn" onClick={() => setStatus(a, 'read')}>
                   Marcar leída
                 </button>
               )}
-              <button className="btn ghost-line" onClick={() => setStatus(a, 'dismissed')}>
-                Descartar
-              </button>
+              {!a.shared && (
+                <button className="btn ghost-line" onClick={() => setStatus(a, 'dismissed')}>
+                  Descartar
+                </button>
+              )}
             </div>
           </li>
         ))}

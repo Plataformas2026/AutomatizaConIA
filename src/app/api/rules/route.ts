@@ -23,6 +23,7 @@ export async function POST(req: Request) {
     .from('shared_files_metadata')
     .select('id, company_id, source')
     .eq('id', fileId)
+    .eq('company_id', ctx.companyId)
     .maybeSingle();
   if (!file) return NextResponse.json({ error: 'file_not_found' }, { status: 404 });
 

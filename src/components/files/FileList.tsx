@@ -20,10 +20,12 @@ interface Props {
   /** Proyecto que se está viendo (null en el Dashboard: archivos sueltos). */
   currentProjectId: string | null;
   emptyText: string;
+  /** Proyecto compartido contigo: solo se ve la lista, sin abrir ni cambiar nada. */
+  readOnly?: boolean;
 }
 
 /** Lista de archivos con selección múltiple, arrastrar a un proyecto y botón «Mover». */
-export function FileList({ files, projects, currentProjectId, emptyText }: Props) {
+export function FileList({ files, projects, currentProjectId, emptyText, readOnly = false }: Props) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -78,6 +80,24 @@ export function FileList({ files, projects, currentProjectId, emptyText }: Props
   }
 
   if (!files.length) return <p className="muted">{emptyText}</p>;
+
+  if (readOnly) {
+    return (
+      <ul className="file-rows">
+        {files.map((f) => (
+          <li className="file-row" key={f.id}>
+            <FileTypeIcon mime={f.mimeType} />
+            <div className="grow">
+              <span className="file-name">{f.name}</span>{' '}
+              <span className={`pill ${f.status}`}>{STATUS_LABEL[f.status] ?? f.status}</span>
+              {f.source === 'local' && <span className="tag tag-local">En un ordenador</span>}
+              {f.sheetsLabel && <span className="tag tag-sheet">{f.sheetsLabel}</span>}
+            </div>
+          </li>
+        ))}
+      </ul>
+    );
+  }
 
   return (
     <>

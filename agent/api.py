@@ -1,4 +1,4 @@
-"""Cliente de las 3 funciones del agente en Supabase (RPC). Solo se usa la clave anon + el token del agente."""
+"""Cliente de las funciones del agente en Supabase (RPC). Solo se usa la clave anon + el token del agente."""
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -48,7 +48,7 @@ class Api:
             if res.status_code in (401, 403):
                 raise ApiError("Clave anon rechazada: revisa SUPABASE_ANON_KEY")
             if res.status_code == 404:
-                raise ApiError("Falta ejecutar la migración 0007_local_agent.sql en Supabase")
+                raise ApiError("Faltan migraciones en Supabase: ejecuta 0007_local_agent.sql y 0008_project_sharing_email.sql")
             raise ApiError(msg[:200] or f"HTTP {res.status_code}")
         return res.json() if res.content else None
 
@@ -63,9 +63,17 @@ class Api:
         })
 
     def report_rule(self, file_id: str, rule_id: str, fingerprints: Optional[dict], error: Optional[str],
-                    alerts: Optional[list]) -> int:
+                    alerts: Optional[list], emails: Optional[list] = None) -> int:
         out = self._call("agent_report_rule", {
             "p_file": file_id, "p_rule": rule_id, "p_fingerprints": fingerprints,
-            "p_error": error, "p_alerts": alerts or [],
+            "p_error": error, "p_alerts": alerts or [], "p_emails": emails or [],
         })
         return int(out or 0)
+
+    def get_outbox(self) -> list[dict]:
+        """Correos pendientes de enviar (ya redactados). Solo se piden si el envío automático está activado."""
+        return self._call("agent_get_outbox", {}) or []
+
+    def report_email(self, email_id: str, status: str, error: Optional[str] = None) -> None:
+        """status: 'sent' (enviado), 'drafted' (borrador en Outlook) o 'failed'."""
+        self._call("agent_report_email", {"p_id": email_id, "p_status": status, "p_error": error})

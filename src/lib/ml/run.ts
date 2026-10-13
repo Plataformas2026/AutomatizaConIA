@@ -494,22 +494,3 @@ export function runMl(table: ParsedTable, config: MlConfig): MlResult {
       });
   }
 }
-
-/** Quita de un resultado todo lo que sean valores o puntos de tus datos: es lo único que se guarda. */
-export function toSavedSummary(r: MlResult): MlResult {
-  switch (r.task) {
-    case 'regression':
-      return { ...r, points: [] };
-    case 'classification':
-      return r;
-    case 'anomaly':
-      return {
-        ...r,
-        items: r.items.slice(0, 100).map((i) => ({ ...i, value: null })),
-        flaggedRows: r.flaggedRows.slice(0, 200),
-        series: [],
-      };
-    case 'clustering':
-      return { ...r, projection: [], assignments: [] };
-  }
-}

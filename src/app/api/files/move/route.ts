@@ -25,6 +25,7 @@ export async function POST(req: Request) {
       .from('projects')
       .select('id')
       .eq('id', body.data.projectId)
+      .eq('company_id', ctx.companyId)
       .maybeSingle();
     if (!project) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }

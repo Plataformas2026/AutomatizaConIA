@@ -269,7 +269,7 @@ function Clustering({ r }: { r: ClusteringResult }) {
 
 /* ── Panel completo ───────────────────────────────────────────────────── */
 
-export function ResultPanel({ result, saved }: { result: MlResult; saved: boolean }) {
+export function ResultPanel({ result }: { result: MlResult }) {
   const info = taskInfo(result.task);
   const quality = 'quality' in result ? result.quality : null;
   return (
@@ -279,12 +279,6 @@ export function ResultPanel({ result, saved }: { result: MlResult; saved: boolea
         {quality && <QualityBadge q={quality} />}
         {'algorithmLabel' in result && <span className="muted">Método: {result.algorithmLabel}</span>}
       </div>
-
-      {saved && (
-        <div className="notice">
-          Este informe se guardó sin tus datos. Las gráficas con puntos y las filas concretas no se almacenan: pulsa «Repetir análisis» para volver a verlas.
-        </div>
-      )}
 
       {result.task === 'regression' && <Regression r={result} />}
       {result.task === 'classification' && <Classification r={result} />}

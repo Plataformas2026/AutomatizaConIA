@@ -10,7 +10,7 @@ export async function loadAgentCards(ctx: SessionContext): Promise<AgentCard[]> 
       .select('id, name, last_seen_at, agent_version, created_at')
       .eq('status', 'active')
       .order('created_at', { ascending: true }),
-    ctx.supabase.from('shared_files_metadata').select('agent_id').eq('source', 'local'),
+    ctx.supabase.from('shared_files_metadata').select('agent_id').eq('source', 'local').eq('company_id', ctx.companyId),
   ]);
 
   const counts = new Map<string, number>();

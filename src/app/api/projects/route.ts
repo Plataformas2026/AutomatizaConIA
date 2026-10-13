@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: coverIssue ? 'invalid_cover' : 'name' }, { status: 400 });
   }
 
-  const { count } = await ctx.supabase.from('projects').select('id', { count: 'exact', head: true });
+  const { count } = await ctx.supabase.from('projects').select('id', { count: 'exact', head: true }).eq('company_id', ctx.companyId);
   if ((count ?? 0) >= MAX_PROJECTS) return NextResponse.json({ error: 'too_many_projects' }, { status: 409 });
 
   const { data, error } = await ctx.supabase

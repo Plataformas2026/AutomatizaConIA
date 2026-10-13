@@ -1,0 +1,36 @@
+/* Proyectos compartidos, alertas por proyecto y correos pendientes. */
+.scope-select { display: inline-flex; flex-direction: column; margin: 4px 0 14px; max-width: 100%; }
+.scope-select select { min-width: 240px; max-width: 100%; }
+.tag-project { background: var(--violet-soft); color: var(--violet); display: inline-flex; align-items: center; gap: 4px; }
+
+.share-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-top: 14px; }
+.share-form .field { margin: 0; min-width: 220px; }
+.share-note { margin: 8px 0 0; font-size: 13px; }
+.share-h { margin: 18px 0 6px; font-size: 15px; }
+.share-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.share-list li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--border); }
+
+.shared-with-me { margin-top: 8px; }
+.project-section { margin-top: 26px; }
+.mini-alerts { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.mini-alerts li { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.readonly-note { margin: 6px 0 0; }
+
+/* Correos pendientes */
+.outbox { display: grid; gap: 12px; margin: 10px 0 6px; }
+.outbox-item { border: 1px solid var(--border); border-left: 4px solid var(--amber); border-radius: 12px; padding: 14px 16px; background: var(--surface); }
+.outbox-item h3 { margin: 0 0 6px; font-size: 16px; }
+.outbox-meta { display: grid; gap: 2px; margin: 6px 0 10px; font-size: 14px; }
+.outbox-meta dt { display: inline; font-weight: 600; color: var(--muted); }
+.outbox-meta dd { display: inline; margin: 0 0 0 4px; }
+.outbox-body { white-space: pre-wrap; background: var(--surface-2); border-radius: 8px; padding: 10px 12px; font-size: 14px; max-height: 220px; overflow: auto; margin: 8px 0 12px; }
+.outbox-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.outbox-problem { color: var(--warning-ink, #8a5a00); margin: 6px 0; font-size: 14px; }
+.email-box { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-top: 10px; display: grid; gap: 12px; }
+.email-box .field { margin: 0; }
+.email-box textarea { width: 100%; min-height: 110px; }
+.email-vars { display: flex; flex-wrap: wrap; gap: 6px; }
+.email-help { font-size: 13px; }
+.choice-col { display: grid; gap: 8px; }
+.action-pick { display: grid; gap: 8px; margin: 16px 0 4px; }
+.rule-email { margin-top: 4px; font-size: 14px; }

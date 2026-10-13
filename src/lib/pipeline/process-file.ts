@@ -7,6 +7,7 @@ import { parseMimeFor, parseWorkbook, type SheetSelection } from '@/lib/parsing/
 import { evaluateRuleAcrossSheets } from '@/lib/rules/engine';
 import { ruleSchema } from '@/lib/rules/types';
 import { runActions } from '@/lib/actions';
+import { referencedColumns, type MatchedRow } from '@/lib/email/render';
 
 export type ProcessResult =
   | { status: 'skipped'; reason: string }
@@ -27,7 +28,7 @@ export async function processFile(fileId: string, opts: { force?: boolean } = {}
   const { data: file } = await admin
     .from('shared_files_metadata')
     .select(
-      'id, company_id, google_token_id, drive_file_id, name, mime_type, status, last_version, sheet_mode, sheet_names',
+      'id, company_id, project_id, google_token_id, drive_file_id, name, mime_type, status, last_version, sheet_mode, sheet_names',
     )
     .eq('id', fileId)
     .maybeSingle();
@@ -115,6 +116,10 @@ export async function processFile(fileId: string, opts: { force?: boolean } = {}
         continue;
       }
       const rule = parsed.data;
+      // Columnas que necesitan los correos de esta regla (para leer solo esas celdas).
+      const emailColumns = rule.actions.flatMap((a) =>
+        a.type === 'email' ? referencedColumns([a.to, a.subject, a.body]) : [],
+      );
       const evaluation = evaluateRuleAcrossSheets(rule, workbook.sheets);
 
       if (evaluation.error) {
@@ -134,15 +139,29 @@ export async function processFile(fileId: string, opts: { force?: boolean } = {}
         next[key] = fingerprint;
 
         if (fingerprint !== previous[key]) {
+          const sheetTable = workbook.sheets.find((s) => s.sheetName === sheet.sheetName)?.table;
+          const rows: MatchedRow[] = [];
+          if (emailColumns.length && sheetTable) {
+            const wanted = new Set(sheet.matchedRows);
+            for (const r of sheetTable.rows) {
+              if (!wanted.has(r.rowNumber)) continue;
+              const values: MatchedRow['values'] = {};
+              for (const c of emailColumns) values[c] = r.values[c] ?? null;
+              rows.push({ rowNumber: r.rowNumber, values });
+              if (rows.length >= 200) break;
+            }
+          }
           await runActions(rule.actions, {
             admin,
             companyId: file.company_id,
-            file: { id: file.id, name: file.name },
+            file: { id: file.id, name: file.name, projectId: file.project_id ?? null },
             rule: { id: rule.id, name: rule.name },
             sheetName: sheet.sheetName,
             columnName: rule.condition.left.column,
             matchedCount: sheet.matchedCount,
             rowRefs: sheet.matchedRows.slice(0, 200),
+            rows,
+            headers: sheetTable?.headers ?? [],
           });
           alerts++;
         }

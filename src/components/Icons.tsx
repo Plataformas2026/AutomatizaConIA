@@ -206,3 +206,22 @@ export function IconImage(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconUsers(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M2.8 19.5c.4-3.4 3-5.2 6.2-5.2s5.8 1.8 6.2 5.2" />
+      <path d="M16 5.2a3.1 3.1 0 0 1 0 5.8M18.5 14.6c1.6.6 2.5 2.2 2.7 4.4" />
+    </Svg>
+  );
+}
+
+export function IconMail(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3" y="5" width="18" height="14" rx="2.5" />
+      <path d="m3.5 7 8.5 6 8.5-6" />
+    </Svg>
+  );
+}

@@ -123,11 +123,13 @@ type Preview =
 interface Props {
   files: FileOption[];
   initial: SavedChart | null;
+  /** Proyecto al que se vincula la gráfica (null = archivos sin proyecto). */
+  projectId: string | null;
   onClose: () => void;
   onSaved: (chart: SavedChart, result: ChartResult | null) => void;
 }
 
-export function ChartBuilder({ files, initial, onClose, onSaved }: Props) {
+export function ChartBuilder({ files, initial, projectId, onClose, onSaved }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const cache = useRef(new Map<string, StructureSheet[]>());
   const [draft, setDraft] = useState<Draft>(() => newDraft(files, initial));
@@ -251,7 +253,7 @@ export function ChartBuilder({ files, initial, onClose, onSaved }: Props) {
     const res = await fetch(initial ? `/api/stats/charts/${initial.id}` : '/api/stats/charts', {
       method: initial ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ config }),
+      body: JSON.stringify(initial ? { config } : { config, projectId }),
     });
     const body = await res.json().catch(() => ({}));
     setSaving(false);

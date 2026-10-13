@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { OPERATORS, OPERATOR_LABELS, isUnary, type Operator } from '@/lib/rules/operators';
 import { humanizeTemplate } from '@/lib/messages/variables';
 import { MessageBuilder, MESSAGE_MAX_LENGTH } from './MessageBuilder';
+import { EmailBox, EMPTY_EMAIL, type EmailDraftValue } from './email/EmailBox';
+import { parseRecipients } from '@/lib/email/address';
 
 export interface ColumnInfo {
   name: string;
@@ -21,9 +23,14 @@ export interface RuleRow {
     operator?: Operator;
     right?: { type?: 'column' | 'value'; column?: string; value?: string | number };
   };
-  actions: { type: string; message?: string; severity?: string }[];
+  actions: { type: string; message?: string; severity?: string; to?: string; subject?: string; mode?: string }[];
   last_error: string | null;
   last_evaluated_at: string | null;
+}
+
+/** «{col:Importe}» → «Importe» para mostrar en la lista. */
+function humanizeEmailTemplate(t: string): string {
+  return humanizeTemplate(t.replace(/\{col:([^{}]{1,200})\}/g, '‹$1›'));
 }
 
 function describe(c: RuleRow['condition']): string {
@@ -64,6 +71,9 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
   const [message, setMessage] = useState('');
   const [msgReset, setMsgReset] = useState(0);
   const [severity, setSeverity] = useState<'info' | 'warning' | 'critical'>('info');
+  const [alertOn, setAlertOn] = useState(true);
+  const [emailOn, setEmailOn] = useState(false);
+  const [email, setEmail] = useState<EmailDraftValue>(EMPTY_EMAIL);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -87,13 +97,28 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
     e.preventDefault();
     setFormError(null);
 
-    if (!message.trim()) {
+    if (!alertOn && !emailOn) {
+      setFormError('Elige al menos una cosa que hacer: avisarte en la aplicación o enviar un correo.');
+      return;
+    }
+    if (alertOn && !message.trim()) {
       setFormError('Escribe el texto del aviso.');
       return;
     }
-    if (message.length > MESSAGE_MAX_LENGTH) {
+    if (alertOn && message.length > MESSAGE_MAX_LENGTH) {
       setFormError(`El texto del aviso no puede pasar de ${MESSAGE_MAX_LENGTH} caracteres.`);
       return;
+    }
+    if (emailOn) {
+      if (!email.to.trim() || !email.subject.trim() || !email.body.trim()) {
+        setFormError('En el correo faltan el destinatario, el asunto o el mensaje.');
+        return;
+      }
+      // Si el destinatario es fijo (sin datos del Excel), comprueba que sea una dirección válida.
+      if (!/\{[^}]+\}/.test(email.to) && !parseRecipients(email.to)) {
+        setFormError('El destinatario no es una dirección de correo válida.');
+        return;
+      }
     }
 
     setSaving(true);
@@ -118,7 +143,12 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
         fileId,
         name,
         condition,
-        actions: [{ type: 'alert', message, severity }],
+        actions: [
+          ...(alertOn ? [{ type: 'alert', message, severity }] : []),
+          ...(emailOn
+            ? [{ type: 'email', from: email.from, to: email.to, subject: email.subject, body: email.body, mode: email.mode }]
+            : []),
+        ],
       }),
     });
     setSaving(false);
@@ -129,6 +159,9 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
     }
     setName('');
     setMessage('');
+    setEmail(EMPTY_EMAIL);
+    setEmailOn(false);
+    setAlertOn(true);
     setMsgReset((n) => n + 1);
     setRightValue('');
     router.refresh();
@@ -237,6 +270,26 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
                 )}
               </div>
 
+              <fieldset className="action-pick">
+                <legend className="field-title">¿Qué hacer cuando se cumpla?</legend>
+                <label className="choice">
+                  <input type="checkbox" checked={alertOn} onChange={(e) => setAlertOn(e.target.checked)} />
+                  <span>
+                    <strong>Avisarme en la aplicación</strong>
+                    <span className="muted">Aparece en la pestaña Alertas del proyecto.</span>
+                  </span>
+                </label>
+                <label className="choice">
+                  <input type="checkbox" checked={emailOn} onChange={(e) => setEmailOn(e.target.checked)} />
+                  <span>
+                    <strong>Enviar también un correo (Outlook)</strong>
+                    <span className="muted">Con datos de tu Excel: nombres, importes, estados…</span>
+                  </span>
+                </label>
+              </fieldset>
+
+              {alertOn && (
+                <>
               <MessageBuilder
                 value={message}
                 onChange={setMessage}
@@ -265,6 +318,21 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
                   ))}
                 </div>
               </div>
+                </>
+              )}
+
+              {emailOn && (
+                <EmailBox
+                  value={email}
+                  onChange={setEmail}
+                  columns={columns.map((c) => c.name)}
+                  hasSheets={hasSheets}
+                  fileName={fileName}
+                  ruleName={name.trim() || 'Nombre de la regla'}
+                  columnName={left || 'Columna'}
+                  sheetName={active[0] ?? ''}
+                />
+              )}
 
               {formError && <p className="err">{formError}</p>}
               <button className="btn primary" disabled={saving}>
@@ -282,7 +350,18 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
           <div className="grow">
             <strong>{r.name}</strong> {!r.enabled && <span className="pill paused">Desactivada</span>}
             <div className="muted">Si {describe(r.condition)}</div>
-            <div className="rule-msg">{humanizeTemplate(r.actions[0]?.message ?? '')}</div>
+            {r.actions.map((a, i) =>
+              a.type === 'email' ? (
+                <div className="rule-email" key={i}>
+                  ✉ {a.mode === 'summary' ? 'Un correo resumen' : 'Un correo por fila'} a «{humanizeEmailTemplate(a.to ?? '')}» ·
+                  asunto «{humanizeEmailTemplate(a.subject ?? '')}»
+                </div>
+              ) : (
+                <div className="rule-msg" key={i}>
+                  {humanizeTemplate(a.message ?? '')}
+                </div>
+              ),
+            )}
             {r.last_error && <div className="err">{r.last_error}</div>}
           </div>
           <button className="btn" onClick={() => toggle(r)}>

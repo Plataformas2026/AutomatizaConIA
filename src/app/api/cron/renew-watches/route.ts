@@ -41,6 +41,11 @@ async function handle(req: Request) {
       console.error('[cron/renew]', e instanceof Error ? e.name : 'UnknownError');
     }
   }
+
+  // Limpieza de correos: resueltos > 7 días y pendientes olvidados > 30 días (no se acumulan datos).
+  const { error: purgeError } = await admin.rpc('purge_email_outbox');
+  if (purgeError) console.error('[cron/purge-outbox]', purgeError.code ?? 'error');
+
   return Response.json({ checked: files?.length ?? 0, renewed, failed });
 }
 

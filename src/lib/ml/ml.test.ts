@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ParsedTable } from '@/lib/parsing/parse';
 import { mulberry32 } from './util';
-import { runMl, toSavedSummary } from './run';
+import { runMl } from './run';
 import { mlConfigSchema, type MlConfig } from './types';
 
 const FILE = '11111111-1111-4111-8111-111111111111';
@@ -103,17 +103,6 @@ test('clustering: un valor extremo no crea un grupo de una sola fila', () => {
 test('avisa cuando una columna decide casi todo (posible fuga de la respuesta)', () => {
   const r = runMl(sales, cfg({ task: 'classification', target: 'Riesgo', features: ['Ventas', 'Ruido'] }));
   assert.ok(r.task === 'classification' && r.insights.some((i) => i.tone === 'warn' && i.text.includes('«Ventas»')));
-});
-
-test('el resumen guardado no contiene valores ni puntos de los datos', () => {
-  const r = runMl(sales, cfg({ task: 'regression', target: 'Ventas', features: ['Unidades'] }));
-  const saved = toSavedSummary(r);
-  assert.ok(saved.task === 'regression' && saved.points.length === 0);
-
-  const rows = Array.from({ length: 100 }, (_, i) => ({ X: i % 10 }));
-  (rows[3] as Record<string, number>).X = 999;
-  const a = toSavedSummary(runMl(table(['X'], rows), cfg({ task: 'anomaly', features: ['X'] })));
-  assert.ok(a.task === 'anomaly' && a.items.every((i) => i.value === null) && a.series.length === 0);
 });
 
 test('errores claros y esquema', () => {

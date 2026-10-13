@@ -1,10 +1,12 @@
 import { redirect } from 'next/navigation';
 import { getSessionContext } from '@/lib/auth';
+import Link from 'next/link';
 import { DrivePicker } from '@/components/DrivePicker';
 import { LocalFilePanel } from '@/components/local/LocalFilePanel';
 import { loadAgentCards } from '@/lib/agents/load';
 import { FileList } from '@/components/files/FileList';
-import { ProjectGrid } from '@/components/projects/ProjectGrid';
+import { ProjectGrid, ProjectCover } from '@/components/projects/ProjectGrid';
+import { OutboxPanel, type OutboxItem } from '@/components/email/OutboxPanel';
 import { FILE_COLUMNS, toFileItem, type FileRowDb } from '@/lib/projects/format';
 import type { ProjectCard } from '@/lib/projects/types';
 
@@ -28,11 +30,49 @@ export default async function DashboardPage({
   if (!ctx) redirect('/login');
   const { google } = await searchParams;
 
-  const [{ data: connections }, { data: files }, { data: projectRows }] = await Promise.all([
-    ctx.supabase.from('google_connections').select('id, google_email, status'),
-    ctx.supabase.from('shared_files_metadata').select(FILE_COLUMNS).order('created_at', { ascending: false }),
-    ctx.supabase.from('projects').select('id, name, cover').order('created_at', { ascending: true }),
-  ]);
+  // Si alguien te invitó a un proyecto con este correo, aquí pasa a ser tuyo (solo lectura).
+  await ctx.supabase.rpc('claim_project_invitations');
+
+  const [{ data: connections }, { data: files }, { data: projectRows }, { data: sharedRows }, { data: outboxRows }] =
+    await Promise.all([
+      ctx.supabase.from('google_connections').select('id, google_email, status'),
+      ctx.supabase
+        .from('shared_files_metadata')
+        .select(FILE_COLUMNS)
+        .eq('company_id', ctx.companyId)
+        .order('created_at', { ascending: false }),
+      ctx.supabase
+        .from('projects')
+        .select('id, name, cover')
+        .eq('company_id', ctx.companyId)
+        .order('created_at', { ascending: true }),
+      ctx.supabase
+        .from('projects')
+        .select('id, name, cover')
+        .neq('company_id', ctx.companyId)
+        .order('created_at', { ascending: true }),
+      ctx.supabase
+        .from('email_outbox')
+        .select('id, file_name, rule_name, sheet_name, row_number, from_addr, to_addr, subject, body, problem, status, created_at')
+        .eq('company_id', ctx.companyId)
+        .in('status', ['pending', 'drafted'])
+        .order('created_at', { ascending: true })
+        .limit(50),
+    ]);
+
+  const outbox: OutboxItem[] = (outboxRows ?? []).map((o) => ({
+    id: o.id,
+    fileName: o.file_name,
+    ruleName: o.rule_name,
+    sheetName: o.sheet_name,
+    rowNumber: o.row_number,
+    from: o.from_addr,
+    to: o.to_addr ?? '',
+    subject: o.subject ?? '',
+    body: o.body ?? '',
+    problem: o.problem,
+    status: o.status as 'pending' | 'drafted',
+  }));
 
   const allFiles = ((files ?? []) as FileRowDb[]).map(toFileItem);
   const loose = allFiles.filter((f) => !f.projectId);
@@ -58,6 +98,8 @@ export default async function DashboardPage({
       </p>
 
       {google && NOTICES[google] && <div className="notice">{NOTICES[google]}</div>}
+
+      <OutboxPanel items={outbox} />
 
       <div className="panel connect row wrap">
         <div className="grow">
@@ -91,6 +133,28 @@ export default async function DashboardPage({
         Agrupa tus archivos por temas. Arrastra un archivo sobre un proyecto, o usa el botón «Mover».
       </p>
       <ProjectGrid projects={projects} />
+
+      {(sharedRows ?? []).length > 0 && (
+        <section className="shared-with-me" aria-labelledby="shared-title">
+          <h2 id="shared-title">Compartidos conmigo</h2>
+          <p className="muted section-hint">
+            Proyectos de otras personas. Puedes ver sus archivos, alertas y estadísticas, pero no cambiarlos.
+          </p>
+          <ul className="pgrid">
+            {(sharedRows ?? []).map((p) => (
+              <li key={p.id}>
+                <Link href={`/projects/${p.id}`} className="pcard" draggable={false}>
+                  <ProjectCover name={p.name} cover={p.cover} />
+                  <span className="pcard-body">
+                    <span className="pcard-name">{p.name}</span>
+                    <span className="muted">Solo lectura</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <h2>{projects.length ? 'Archivos sin proyecto' : 'Archivos compartidos'}</h2>
       <FileList

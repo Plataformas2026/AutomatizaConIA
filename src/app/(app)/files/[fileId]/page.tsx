@@ -15,6 +15,7 @@ export default async function FilePage({ params }: { params: Promise<{ fileId: s
     .from('shared_files_metadata')
     .select('id, name, mime_type, status, last_error, source, local_path, agent_id')
     .eq('id', fileId)
+    .eq('company_id', ctx.companyId)
     .maybeSingle();
   if (!file) notFound();
 

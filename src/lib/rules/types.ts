@@ -41,7 +41,21 @@ export const alertActionSchema = z.object({
   severity: z.enum(['info', 'warning', 'critical']).default('info'),
 });
 
-export const actionSchema = alertActionSchema;
+/** Correo de Outlook. `to`, `subject` y `body` admiten {col:Columna} y las variables de las alertas.
+ *  El sistema nunca envía en nombre de nadie sin autorización: si tu ordenador no está configurado
+ *  para el envío automático, el correo aparece en tu Dashboard como «pendiente de enviar». */
+export const emailActionSchema = z.object({
+  type: z.literal('email'),
+  /** Cuenta desde la que debe salir (opcional). Sin variables. */
+  from: z.union([z.literal(''), z.string().trim().email().max(254)]).default(''),
+  to: z.string().trim().min(1).max(500),
+  subject: z.string().trim().min(1).max(200),
+  body: z.string().trim().min(1).max(4000),
+  /** per_row: un correo por fila que cumple la condición · summary: uno solo con el resumen. */
+  mode: z.enum(['per_row', 'summary']).default('per_row'),
+});
+
+export const actionSchema = z.discriminatedUnion('type', [alertActionSchema, emailActionSchema]);
 
 /* ── Regla ─────────────────────────────────────────────────── */
 export const ruleSchema = z.object({
@@ -70,4 +84,6 @@ export const updateRuleSchema = z
 
 export type Condition = z.infer<typeof conditionSchema>;
 export type Action = z.infer<typeof actionSchema>;
+export type AlertAction = z.infer<typeof alertActionSchema>;
+export type EmailAction = z.infer<typeof emailActionSchema>;
 export type Rule = z.infer<typeof ruleSchema>;

@@ -197,3 +197,21 @@ cd C:\AutomatizacionIA\agent
 ```
 
 Incluyen una prueba completa con un «Supabase» falso, Watchdog real y archivos reales.
+
+
+---
+
+## Correos con tu Outlook (opcional)
+
+Las reglas pueden enviar un correo con datos del Excel. **Por defecto el agente NO envía nada** (`EMAIL_MODE=off`):
+los correos aparecen en el Dashboard como «Tienes pendiente mandar el correo…» y los envías tú.
+
+Para que el agente los gestione con el Outlook de escritorio de tu PC (Windows, Outlook clásico abierto y con sesión):
+
+1. Instala la pieza extra (una vez): `.venv\Scripts\python.exe -m pip install -r requirements.txt` (incluye `pywin32`).
+2. En `.env` elige un modo:
+   - `EMAIL_MODE=draft` → los deja en **Borradores** de Outlook; los revisas y envías tú. *(Recomendado para empezar.)*
+   - `EMAIL_MODE=send` → los **envía** solo, pero únicamente a los dominios de `EMAIL_ALLOWED_DOMAINS=miempresa.com` (obligatorio) y con tope `EMAIL_MAX_PER_HOUR` (20 por defecto).
+3. Reinicia el agente y ejecuta `comprobar_agente.bat`: debe decir «Correos: modo …».
+
+Seguridad: el contenido de una celda de Excel acaba en el correo. Por eso en modo `send` solo se envía a dominios que tú autorizas. Un correo con destinatario no válido o fuera de esos dominios queda pendiente en la web con el motivo. Si el remitente de la regla no coincide con una cuenta de tu Outlook, también queda pendiente.

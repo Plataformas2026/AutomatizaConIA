@@ -1,19 +1,20 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Action } from '@/lib/rules/types';
+import type { Action, AlertAction, EmailAction } from '@/lib/rules/types';
+import { buildEmails, type MatchedRow } from '@/lib/email/render';
 import { variablePattern, type VariableKey } from '@/lib/messages/variables';
 
 /**
- * Registro de acciones. Para añadir una nueva (email, webhook, Slack…):
+ * Registro de acciones. Para añadir una nueva (webhook, Slack…):
  *   1. define su esquema en rules/types.ts
- *   2. añade aquí su handler en `handlers`
+ *   2. añade aquí su handler y su `case` en runActions
  * El pipeline no cambia.
  */
 
 export interface ActionContext {
   admin: SupabaseClient;
   companyId: string;
-  file: { id: string; name: string };
+  file: { id: string; name: string; projectId: string | null };
   rule: { id: string; name: string };
   /** Hoja donde se detectó; null en CSV. */
   sheetName: string | null;
@@ -22,12 +23,12 @@ export interface ActionContext {
   matchedCount: number;
   /** Nº de fila (máx. 200). Nunca valores de celdas. */
   rowRefs: number[];
+  /** Filas que cumplen la regla con SOLO las columnas que usa algún correo (vacío si no hay acción de correo).
+   *  Existen únicamente en memoria durante la evaluación. */
+  rows: MatchedRow[];
+  /** Columnas que existen en la hoja donde se detectó. */
+  headers: string[];
 }
-
-type Handler<T extends Action['type']> = (
-  action: Extract<Action, { type: T }>,
-  ctx: ActionContext,
-) => Promise<void>;
 
 /** PRIVACIDAD: las plantillas solo admiten variables que NO provienen de las
  *  celdas. Así el texto de la alerta nunca copia datos del archivo.
@@ -45,27 +46,61 @@ export function renderMessage(template: string, ctx: ActionContext): string {
   return template.replace(variablePattern(), (_, k: VariableKey) => vars[k]);
 }
 
-const handlers: { [K in Action['type']]: Handler<K> } = {
-  alert: async (action, ctx) => {
-    const { error } = await ctx.admin.from('alerts').insert({
+async function runAlert(action: AlertAction, ctx: ActionContext): Promise<void> {
+  const { error } = await ctx.admin.from('alerts').insert({
+    company_id: ctx.companyId,
+    file_id: ctx.file.id,
+    rule_id: ctx.rule.id,
+    file_name: ctx.file.name,
+    rule_name: ctx.rule.name,
+    sheet_name: ctx.sheetName,
+    message: renderMessage(action.message, ctx),
+    severity: action.severity,
+    matched_count: ctx.matchedCount,
+    row_refs: ctx.rowRefs.slice(0, 200),
+  });
+  if (error) throw new Error(`No se pudo guardar la alerta: ${error.code ?? error.message}`);
+}
+
+/**
+ * Correo: el servidor no puede enviar en nombre de nadie. Deja el correo ya redactado en la cola
+ * «pendientes» del Dashboard (o lo recoge el agente de tu ordenador, si lo has configurado para enviar).
+ */
+async function runEmail(action: EmailAction, ctx: ActionContext): Promise<void> {
+  const drafts = buildEmails(
+    action,
+    ctx.rule.id,
+    { fileName: ctx.file.name, ruleName: ctx.rule.name, sheetName: ctx.sheetName, columnName: ctx.columnName, count: ctx.matchedCount },
+    ctx.rows,
+    ctx.headers,
+  );
+  if (!drafts.length) return;
+
+  const { error } = await ctx.admin.from('email_outbox').upsert(
+    drafts.map((d) => ({
       company_id: ctx.companyId,
+      project_id: ctx.file.projectId,
       file_id: ctx.file.id,
       rule_id: ctx.rule.id,
       file_name: ctx.file.name,
       rule_name: ctx.rule.name,
-      sheet_name: ctx.sheetName,
-      message: renderMessage(action.message, ctx),
-      severity: action.severity,
-      matched_count: ctx.matchedCount,
-      row_refs: ctx.rowRefs.slice(0, 200),
-    });
-    if (error) throw new Error(`No se pudo guardar la alerta: ${error.code ?? error.message}`);
-  },
-};
+      sheet_name: d.sheet,
+      row_number: d.row,
+      dedupe_key: d.key,
+      from_addr: d.from || null,
+      to_addr: d.to,
+      subject: d.subject,
+      body: d.body,
+      problem: d.problem,
+    })),
+    { onConflict: 'rule_id,dedupe_key', ignoreDuplicates: true },
+  );
+  if (error) throw new Error(`No se pudo preparar el correo: ${error.code ?? error.message}`);
+}
 
 export async function runActions(actions: Action[], ctx: ActionContext): Promise<void> {
   for (const action of actions) {
-    // Con varios tipos de acción, TS puede exigir aquí un cast al handler correspondiente.
-    await handlers[action.type](action, ctx);
+    if (action.type === 'alert') await runAlert(action, ctx);
+    else await runEmail(action, ctx);
   }
 }

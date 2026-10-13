@@ -33,6 +33,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ fileId
     .from('shared_files_metadata')
     .select('id, mime_type, source')
     .eq('id', fileId)
+    .eq('company_id', ctx.companyId)
     .maybeSingle();
   if (!file) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   if (file.mime_type === 'text/csv') return NextResponse.json({ error: 'no_sheets' }, { status: 400 });
@@ -69,6 +70,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ file
     .from('shared_files_metadata')
     .select('id, google_token_id, watch_channel_id, watch_resource_id')
     .eq('id', fileId)
+    .eq('company_id', ctx.companyId)
     .maybeSingle();
   if (!file) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 

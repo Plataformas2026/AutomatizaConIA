@@ -15,6 +15,11 @@ export interface AlertRow {
   row_refs: number[];
   status: 'open' | 'read' | 'dismissed';
   created_at: string;
+  /** Proyecto al que pertenece la alerta (vinculado a través de su archivo). */
+  project_id?: string | null;
+  /** Solo en la pestaña Alertas: nombre del proyecto y si es de un proyecto compartido conmigo. */
+  project_name?: string | null;
+  shared?: boolean;
 }
 
 export interface ToastItem {
@@ -71,9 +76,10 @@ export function AlertsProvider({
     const { count, error } = await createClient()
       .from('alerts')
       .select('id', { count: 'exact', head: true })
+      .eq('company_id', companyId)
       .eq('status', 'open');
     if (!error && count !== null) setUnread(count);
-  }, []);
+  }, [companyId]);
 
   const onNewAlert = useCallback((fn: (a: AlertRow) => void) => {
     listeners.current.add(fn);

@@ -109,8 +109,9 @@ interface Props {
   config: ChartConfig;
   fileName: string;
   state: ChartState;
-  onEdit: () => void;
-  onDelete: () => void;
+  /** Sin estas funciones la gráfica es de solo lectura (proyecto compartido contigo). */
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
 export function ChartCard({ config, fileName, state, onEdit, onDelete }: Props) {
@@ -143,14 +144,18 @@ export function ChartCard({ config, fileName, state, onEdit, onDelete }: Props) 
               <span className="sr-only">{asTable ? 'Ver gráfica' : 'Ver como tabla'}</span>
             </button>
           )}
-          <button type="button" className="iconbtn" onClick={onEdit} title="Editar gráfica">
-            <IconEdit size={17} />
-            <span className="sr-only">Editar gráfica</span>
-          </button>
-          <button type="button" className="iconbtn danger" onClick={onDelete} title="Quitar gráfica">
-            <IconTrash size={17} />
-            <span className="sr-only">Quitar gráfica</span>
-          </button>
+          {onEdit && (
+            <button type="button" className="iconbtn" onClick={onEdit} title="Editar gráfica">
+              <IconEdit size={17} />
+              <span className="sr-only">Editar gráfica</span>
+            </button>
+          )}
+          {onDelete && (
+            <button type="button" className="iconbtn danger" onClick={onDelete} title="Quitar gráfica">
+              <IconTrash size={17} />
+              <span className="sr-only">Quitar gráfica</span>
+            </button>
+          )}
         </div>
       </header>
 

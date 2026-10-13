@@ -92,7 +92,6 @@ export const ANOMALY_METHOD_HINTS: Record<AnomalyMethod, string> = {
 };
 
 export const MAX_FEATURES = 30;
-export const MAX_REPORTS = 50;
 export const MIN_ROWS = 30;
 export const TRAIN_OPTIONS = [60, 70, 75, 80, 85, 90] as const;
 export const DEPTH_OPTIONS = [
@@ -210,7 +209,7 @@ export interface ClassificationResult extends Base {
 export interface AnomalyItem {
   row: number;
   column: string;
-  /** null en los informes guardados (los valores no se almacenan). */
+  /** null si el valor no está disponible. */
   value: number | null;
   score: number;
   direction: 'alto' | 'bajo';

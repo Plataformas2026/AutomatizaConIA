@@ -28,6 +28,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ fileId:
     .from('shared_files_metadata')
     .select('id, source, local_structure, google_token_id, drive_file_id, sheet_mode, sheet_names')
     .eq('id', fileId)
+    .eq('company_id', ctx.companyId)
     .maybeSingle();
   if (!file) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 

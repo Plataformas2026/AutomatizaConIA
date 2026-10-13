@@ -38,6 +38,10 @@ class Config:
     debounce_seconds: float
     max_file_bytes: int
     base_dir: Path
+    # Envío de correos con tu Outlook. Por defecto DESACTIVADO: los correos quedan «pendientes» en la web.
+    email_mode: str = "off"            # off | draft (los deja en Borradores) | send (los envía)
+    email_allowed_domains: tuple[str, ...] = ()
+    email_max_per_hour: int = 20
 
     @property
     def state_file(self) -> Path:
@@ -49,7 +53,7 @@ class Config:
 
 
 def load_config(base_dir: Path = HERE) -> Config:
-    env = {**_parse_env_file(base_dir / ".env"), **{k: v for k, v in os.environ.items() if k.startswith(("SUPABASE_", "AGENT_", "WATCH_", "POLL_", "DEBOUNCE_", "MAX_FILE"))}}
+    env = {**_parse_env_file(base_dir / ".env"), **{k: v for k, v in os.environ.items() if k.startswith(("SUPABASE_", "AGENT_", "WATCH_", "POLL_", "DEBOUNCE_", "MAX_FILE", "EMAIL_"))}}
 
     missing = [k for k in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "AGENT_TOKEN", "WATCH_FOLDERS") if not env.get(k)]
     if missing:
@@ -79,6 +83,16 @@ def load_config(base_dir: Path = HERE) -> Config:
         except ValueError as e:
             raise ConfigError(f"{key} debe ser un número.") from e
 
+    email_mode = env.get("EMAIL_MODE", "off").strip().lower() or "off"
+    if email_mode not in ("off", "draft", "send"):
+        raise ConfigError("EMAIL_MODE debe ser off, draft o send.")
+    domains = tuple(d.strip().lower().lstrip("@") for d in env.get("EMAIL_ALLOWED_DOMAINS", "").split(",") if d.strip())
+    if email_mode == "send" and not domains:
+        raise ConfigError(
+            "Con EMAIL_MODE=send hay que indicar EMAIL_ALLOWED_DOMAINS (p. ej. miempresa.com): "
+            "solo se enviará automáticamente a esos dominios."
+        )
+
     return Config(
         supabase_url=url,
         anon_key=env["SUPABASE_ANON_KEY"],
@@ -88,4 +102,7 @@ def load_config(base_dir: Path = HERE) -> Config:
         debounce_seconds=number("DEBOUNCE_SECONDS", 3, 1),
         max_file_bytes=int(number("MAX_FILE_MB", 50, 1) * 1024 * 1024),
         base_dir=base_dir,
+        email_mode=email_mode,
+        email_allowed_domains=domains,
+        email_max_per_hour=int(number("EMAIL_MAX_PER_HOUR", 20, 1)),
     )

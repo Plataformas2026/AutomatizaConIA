@@ -29,7 +29,9 @@ from typing import Optional
 
 from api import Api, ApiError, ApiUnavailable, TokenError
 from config import Config, ConfigError, load_config
+import email_render
 import engine
+import outlook
 import readers
 
 VERSION = "1.0.0"
@@ -102,6 +104,7 @@ class Agent:
         self._name_index_at = 0.0
         self._offline = False
         self.stop = threading.Event()
+        self.outlook = outlook.OutlookSender()
 
     # ── Resolución de rutas ─────────────────────────────────────────────
     def _scan_names(self) -> dict[str, list[Path]]:
@@ -304,16 +307,59 @@ class Agent:
                 self.api.report_rule(fid, rule.id, None, ev.error, None)
                 continue
             previous = raw.get("fingerprints") or {}
-            fingerprints, alerts = engine.build_alerts(rule, ev, previous, name)
-            self.api.report_rule(fid, rule.id, fingerprints, None, alerts)
+            fingerprints, alerts, emails = engine.build_outputs(rule, ev, previous, name, wb.sheets)
+            self.api.report_rule(fid, rule.id, fingerprints, None, alerts, emails)
             raw["fingerprints"] = fingerprints  # por si se reevalúa antes de la próxima sincronización
-            new_alerts += len(alerts)
+            new_alerts += len(alerts) + len(emails)
 
         st.update(hash=digest, cfg_sig=sig, mtime_ns=stat.st_mtime_ns, size=stat.st_size,
                   structure_try=time.monotonic())
         st.pop("reported_error", None)
         self.state.save()
-        log.info("«%s»: %d regla(s) evaluadas, %d alerta(s) nueva(s)", name, len(rules), new_alerts)
+        log.info("«%s»: %d regla(s) evaluadas, %d aviso(s) nuevo(s)", name, len(rules), new_alerts)
+
+    # ── Correos (Outlook) ───────────────────────────────────────────────
+    def process_outbox(self) -> None:
+        """Envía (o deja en Borradores) los correos pendientes, SOLO si EMAIL_MODE lo permite.
+        Con EMAIL_MODE=off (por defecto) no se hace nada y los correos siguen «pendientes» en la web."""
+        mode = self.cfg.email_mode
+        if mode == "off":
+            return
+        sent_log: dict = self.state.data.setdefault("_emails", {})
+        now = time.time()
+        recent = [t for t in sent_log.values() if now - t < 3600]
+        for item in self.api.get_outbox():
+            eid = str(item.get("id"))
+            if eid in sent_log:  # ya se envió pero no se pudo avisar a la web: solo se reintenta el aviso
+                self.api.report_email(eid, "sent" if mode == "send" else "drafted")
+                continue
+            recipients = email_render.parse_recipients(str(item.get("to") or ""))
+            if recipients is None:
+                self.api.report_email(eid, "failed", "Destinatario no válido")
+                continue
+            if mode == "send":
+                bad = [r for r in recipients if r.rsplit("@", 1)[-1].lower() not in self.cfg.email_allowed_domains]
+                if bad:
+                    self.api.report_email(eid, "failed", "Destinatario fuera de los dominios autorizados en EMAIL_ALLOWED_DOMAINS")
+                    continue
+                if len(recent) >= self.cfg.email_max_per_hour:
+                    log.warning("Límite de %d correos por hora alcanzado; el resto queda pendiente.", self.cfg.email_max_per_hour)
+                    break
+            try:
+                self.outlook.deliver(to=recipients, subject=str(item.get("subject") or ""), body=str(item.get("body") or ""),
+                                     sender=(item.get("from") or None), draft=(mode == "draft"))
+            except (outlook.OutlookRejected, outlook.OutlookUnavailable) as e:
+                log.warning("No se pudo entregar un correo a Outlook: %s", e)
+                self.api.report_email(eid, "failed", str(e))
+                if isinstance(e, outlook.OutlookUnavailable):
+                    break
+                continue
+            sent_log[eid] = now
+            recent.append(now)
+            self.state.data["_emails"] = dict(sorted(sent_log.items(), key=lambda kv: kv[1])[-500:])
+            self.state.save()
+            self.api.report_email(eid, "sent" if mode == "send" else "drafted")
+            log.info("Correo %s (%s).", "enviado" if mode == "send" else "guardado en Borradores", eid[:8])
 
     def _report_error(self, fid: str, message: str, st: dict) -> None:
         if st.get("reported_error") != message:
@@ -351,6 +397,7 @@ class Agent:
     def run(self) -> int:
         self._start_observer()
         next_poll = 0.0
+        next_mail = 0.0
         log.info("Agente %s en marcha. Carpetas autorizadas: %s", VERSION, "; ".join(str(f) for f in self.cfg.folders))
         try:
             while not self.stop.is_set():
@@ -364,6 +411,9 @@ class Agent:
                             self._offline = False
                     self._drain_events()
                     self._run_due()
+                    if now >= next_mail:
+                        next_mail = now + 20
+                        self.process_outbox()
                 except ApiUnavailable as e:
                     if not self._offline:
                         log.warning("Sin conexión con Supabase (%s). Se reintentará.", e)
@@ -433,6 +483,11 @@ def check(cfg: Config, api: Api) -> int:
         print(f"✗ {e}")
         return 3
     print(f"✓ Conexión con Supabase correcta. Agente: «{conf['agent']['name']}»")
+    if cfg.email_mode == "off":
+        print("Correos: envío automático DESACTIVADO (los correos quedan «pendientes» en la web).")
+    else:
+        extra = f", solo a: {', '.join(cfg.email_allowed_domains)}" if cfg.email_mode == "send" else ""
+        print(f"Correos: modo «{cfg.email_mode}» con tu Outlook{extra}. Máximo {cfg.email_max_per_hour} por hora.")
     agent = Agent(cfg, api)
     files = conf.get("files", [])
     print(f"Archivos asignados: {len(files)}")

@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   const { data: agent } = await ctx.supabase.from('local_agents').select('id').eq('id', agentId).maybeSingle();
   if (!agent) return NextResponse.json({ error: 'agent_not_found' }, { status: 404 });
   if (projectId) {
-    const { data: project } = await ctx.supabase.from('projects').select('id').eq('id', projectId).maybeSingle();
+    const { data: project } = await ctx.supabase.from('projects').select('id').eq('id', projectId).eq('company_id', ctx.companyId).maybeSingle();
     if (!project) return NextResponse.json({ error: 'project_not_found' }, { status: 404 });
   }
 
