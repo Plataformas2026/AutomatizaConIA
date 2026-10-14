@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSessionContext } from '@/lib/auth';
+import { audit, dbForResource } from '@/lib/admin';
 import { coverSchema, projectNameSchema } from '@/lib/projects/types';
 
 export const dynamic = 'force-dynamic';
@@ -32,9 +33,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ projec
   if (body.data.name !== undefined) update.name = body.data.name;
   if (body.data.cover !== undefined) update.cover = body.data.cover;
 
-  const { data, error } = await ctx.supabase.from('projects').update(update).eq('id', projectId).select('id');
+  const { data, error } = await dbForResource(ctx).from('projects').update(update).eq('id', projectId).select('id, company_id');
   if (error) return NextResponse.json({ error: 'db_error' }, { status: 500 });
   if (!data?.length) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  await audit(ctx, data[0].company_id as string, 'project.update', 'project', projectId);
   return NextResponse.json({ ok: true });
 }
 
@@ -45,8 +47,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ proj
   if (!ctx) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   if (!idSchema.safeParse(projectId).success) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
-  const { data, error } = await ctx.supabase.from('projects').delete().eq('id', projectId).select('id');
+  const { data, error } = await dbForResource(ctx).from('projects').delete().eq('id', projectId).select('id, company_id');
   if (error) return NextResponse.json({ error: 'db_error' }, { status: 500 });
   if (!data?.length) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  await audit(ctx, data[0].company_id as string, 'project.delete', 'project', projectId);
   return NextResponse.json({ ok: true });
 }

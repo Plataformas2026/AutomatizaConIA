@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { COVER_MAX_CHARS, PROJECT_ERRORS } from '@/lib/projects/types';
 import { IconImage } from '../Icons';
+import { AdminUserSelect } from '../AdminUserSelect';
+import { useIsAdmin } from '../AdminProvider';
 
 const COVER_SIZE = 480;
 
@@ -41,11 +43,17 @@ async function toSquareCover(file: File): Promise<string> {
 interface Props {
   /** Sin `project`: crear. Con `project`: editar nombre y portada. */
   project?: { id: string; name: string; cover: string | null };
+  /** Solo administradores: al crear, usuario propuesto; al editar, dueño del proyecto (solo lectura). */
+  ownerUserId?: string;
+  /** Se llama tras guardar (si no, se refresca la página). */
+  onSaved?: () => void;
   onClose: () => void;
 }
 
-export function ProjectDialog({ project, onClose }: Props) {
+export function ProjectDialog({ project, ownerUserId, onSaved, onClose }: Props) {
   const router = useRouter();
+  const isAdmin = useIsAdmin();
+  const [forUserId, setForUserId] = useState<string>(ownerUserId ?? '');
   const dialogRef = useRef<HTMLDialogElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(project?.name ?? '');
@@ -83,7 +91,8 @@ export function ProjectDialog({ project, onClose }: Props) {
     }
     setBusy(true);
     setError(null);
-    const payload: { name: string; cover?: string | null } = { name: trimmed };
+    const payload: { name: string; cover?: string | null; forUserId?: string } = { name: trimmed };
+    if (isAdmin && !project && forUserId) payload.forUserId = forUserId;
     if (!project || coverChanged) payload.cover = cover;
     const res = await fetch(project ? `/api/projects/${project.id}` : '/api/projects', {
       method: project ? 'PATCH' : 'POST',
@@ -96,7 +105,8 @@ export function ProjectDialog({ project, onClose }: Props) {
       setBusy(false);
       return;
     }
-    router.refresh();
+    if (onSaved) onSaved();
+    else router.refresh();
     onClose();
   }
 
@@ -117,6 +127,14 @@ export function ProjectDialog({ project, onClose }: Props) {
             required
           />
         </div>
+
+        <AdminUserSelect
+          value={forUserId}
+          onChange={setForUserId}
+          disabled={!!project}
+          label={project ? 'Propietario' : 'Crear para'}
+          hint={project ? 'Un proyecto no cambia de dueño; para otro usuario, créalo de nuevo a su nombre.' : 'El proyecto aparecerá en la cuenta de esta persona.'}
+        />
 
         <div className="field">
           <span className="field-title">Foto de portada (opcional)</span>

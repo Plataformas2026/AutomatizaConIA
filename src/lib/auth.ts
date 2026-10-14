@@ -19,11 +19,16 @@ export async function getSessionContext() {
     .maybeSingle();
   if (!membership) return null;
 
+  // Administrador de la plataforma (tabla platform_admins, solo editable desde el SQL Editor de Supabase).
+  // Si la migración 0011 aún no está aplicada, la consulta falla y se trata como «no administrador».
+  const { data: isAdmin } = await supabase.rpc('is_platform_admin');
+
   return {
     supabase,
     user,
     companyId: membership.company_id as string,
     role: membership.role as 'owner' | 'admin' | 'member',
+    isAdmin: isAdmin === true,
   };
 }
 

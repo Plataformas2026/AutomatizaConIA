@@ -125,37 +125,107 @@ def _epoch_ms(dt: datetime) -> float:
     return (dt - _EPOCH).total_seconds() * 1000
 
 
+_MONTHS = {
+    "ene": 1, "jan": 1, "feb": 2, "mar": 3, "abr": 4, "apr": 4, "may": 5, "jun": 6, "jul": 7, "ago": 8, "aug": 8,
+    "sep": 9, "set": 9, "oct": 10, "nov": 11, "dic": 12, "dec": 12,
+}
+# Sufijo opcional de hora: «14/10/2026 10:30», «2026-10-14T10:30:00Z», «14/10/2026 0:00:00».
+_TIME_TAIL = r"(?:[ T,]+\d{1,2}:\d{2}(?::\d{2}(?:[.,]\d+)?)?(?:\s?[ap]\.?m\.?)?(?:Z|[+-]\d{2}:?\d{2})?)?"
+_RE_ISO = re.compile(rf"^(\d{{4}})[-/.](\d{{1,2}})[-/.](\d{{1,2}}){_TIME_TAIL}$", re.IGNORECASE)
+_RE_DMY = re.compile(rf"^(\d{{1,2}})[/.-](\d{{1,2}})[/.-](\d{{4}}|\d{{2}}){_TIME_TAIL}$", re.IGNORECASE)
+_RE_TEXT = re.compile(
+    rf"^(\d{{1,2}})º?[ /.-]*(?:de )?([a-záéíóúñ]{{3,12}})\.?[ /.,-]*(?:de )?(\d{{4}}|\d{{2}}){_TIME_TAIL}$", re.IGNORECASE
+)
+
+
+def _ymd(y: int, mo: int, d: int) -> Optional[int]:
+    if not (1 <= mo <= 12 and 1 <= d <= 31):
+        return None
+    try:
+        dt = datetime(y, mo, d)
+    except ValueError:
+        return None  # 31/04 no existe
+    return _to_day(_epoch_ms(dt))
+
+
+def _full_year(yy: str) -> int:
+    if len(yy) == 4:
+        return int(yy)
+    n = int(yy)
+    return 2000 + n if n <= 69 else 1900 + n
+
+
+def _strip_accents(t: str) -> str:
+    import unicodedata
+
+    return "".join(c for c in unicodedata.normalize("NFD", t) if unicodedata.category(c) != "Mn")
+
+
+def _parse_date_text(raw: str) -> Optional[int]:
+    """Fechas en texto: ISO (2026-10-09, 2026/10/09), dd/mm/aaaa y dd/mm/aa (también con - o .), con hora opcional,
+    y con el mes escrito («15 oct 2026», «15-oct-26», «15 de octubre de 2026»). Se asume día/mes/año (España)."""
+    s = re.sub(r"\s+", " ", raw.strip())
+    if not s:
+        return None
+
+    m = _RE_ISO.match(s)
+    if m:
+        # ISO con hora y zona («…Z» / «+02:00»): respeta el instante, como siempre.
+        if re.match(r"^\d{4}-\d{2}-\d{2}[T ]\d", s) and re.search(r"(Z|[+-]\d{2}:?\d{2})$", s):
+            try:
+                return _to_day(_epoch_ms(datetime.fromisoformat(s.replace("Z", "+00:00").replace(" ", "T"))))
+            except ValueError:
+                return None
+        return _ymd(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
+    m = _RE_DMY.match(s)
+    if m:
+        y, mo, d = _full_year(m.group(3)), int(m.group(2)), int(m.group(1))
+        if len(m.group(3)) == 4:
+            # Compatibilidad: con año de 4 cifras, un día/mes fuera de rango «desborda» (31/02 → 3 mar), como en la web.
+            y += (mo - 1) // 12
+            mo = (mo - 1) % 12 + 1
+            try:
+                dt = datetime(y, mo, 1) + timedelta(days=d - 1)
+            except (ValueError, OverflowError):
+                return None
+            return _to_day(_epoch_ms(dt))
+        return _ymd(y, mo, d)
+
+    m = _RE_TEXT.match(s)
+    if m:
+        mo = _MONTHS.get(_strip_accents(m.group(2).lower())[:3])
+        return _ymd(_full_year(m.group(3)), mo, int(m.group(1))) if mo else None
+    return None
+
+
+def _from_excel_serial(n: float) -> Optional[int]:
+    """Número de serie de Excel (días desde 1899-12-30) → nº de días desde 1970. Solo 1927–2118."""
+    return math.floor(n) - 25569 if math.isfinite(n) and 10_000 <= n <= 80_000 else None
+
+
 def to_date(v: Any) -> Optional[int]:
-    """Fechas: objetos fecha (Excel), ISO (2026-10-09) o dd/mm/aaaa. Se comparan por día."""
+    """Fechas: objetos fecha (Excel) o texto en los formatos de arriba. Se comparan por día."""
     if isinstance(v, datetime):
         return _to_day(_epoch_ms(v))
     if isinstance(v, date):
         return _to_day(_epoch_ms(datetime(v.year, v.month, v.day)))
     if not isinstance(v, str):
         return None
-    s = v.strip()
+    return _parse_date_text(v)
 
-    if re.match(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}", s):
-        try:
-            if len(s) == 10:
-                dt = datetime.fromisoformat(s)
-            else:
-                dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
-        except ValueError:
-            return None
-        return _to_day(_epoch_ms(dt))
 
-    m = re.fullmatch(r"([0-9]{1,2})[/.-]([0-9]{1,2})[/.-]([0-9]{4})", s)
-    if m:
-        d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        # Date.UTC de JavaScript «desborda» (mes 13 → enero del año siguiente); lo imitamos.
-        y += (mo - 1) // 12
-        mo = (mo - 1) % 12 + 1
-        try:
-            dt = datetime(y, mo, 1) + timedelta(days=d - 1)
-        except (ValueError, OverflowError):
-            return None
-        return _to_day(_epoch_ms(dt))
+def to_date_loose(v: Any) -> Optional[int]:
+    """Como `to_date`, pero acepta también el número de serie de Excel (45123 = 16/07/2023)."""
+    d = to_date(v)
+    if d is not None:
+        return d
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return _from_excel_serial(float(v))
+    if isinstance(v, str) and re.fullmatch(r"\d{5}(\.\d+)?", v.strip()):
+        return _from_excel_serial(float(v))
     return None
 
 
@@ -178,8 +248,12 @@ def add_units(day: int, n: int, unit: str) -> int:
     return (date(y, m + 1, min(d.day, last)) - date(1970, 1, 1)).days
 
 
-def looks_like_dates(values: list[Any]) -> bool:
-    """¿Al menos el 60 % de los valores con contenido son fechas? (para ofrecer las opciones de fecha)."""
+_DATE_HEADER = re.compile(r"fecha|date|\balta\b|\bbaja\b|venc|caduc|nacim|inicio|fin\b|plazo|expir|entrega|emisi|cita|renov", re.IGNORECASE)
+
+
+def looks_like_dates(values: list[Any], header: str = "") -> bool:
+    """¿Parece una columna de fecha? Basta con el 60 % de los valores con contenido (30 % si el nombre de la
+    columna lo sugiere). Es solo una pista: el calendario se ofrece siempre."""
     filled = dates = 0
     for v in values:
         if is_empty(v):
@@ -189,7 +263,15 @@ def looks_like_dates(values: list[Any]) -> bool:
             dates += 1
         if filled >= 200:
             break
-    return filled > 0 and dates / filled >= 0.6
+    if filled == 0:
+        return False
+    return dates / filled >= (0.3 if _DATE_HEADER.search(header) else 0.6)
+
+
+def unreadable_dates(rule: "Rule", table: "Table") -> list[int]:
+    """Nº de fila de las celdas con contenido que no se reconocen como fecha (solo números de fila, nunca datos)."""
+    return [r.number for r in table.rows
+            if not is_empty(r.values.get(rule.left)) and to_date_loose(r.values.get(rule.left)) is None]
 
 
 def _text(v: Any) -> str:
@@ -210,13 +292,13 @@ def _order(a: Any, b: Any) -> Optional[int]:
 def compare(left: Any, op: str, right: Any, unit: str = "days", today: Optional[int] = None) -> bool:
     if op == "elapsed":
         # «Han pasado al menos N días/semanas/meses/años desde la fecha de la celda».
-        day, n = to_date(left), to_number(right)
+        day, n = to_date_loose(left), to_number(right)
         if day is None or n is None or not float(n).is_integer() or not 0 <= n <= MAX_ELAPSED:
             return False
         return (today_day() if today is None else today) >= add_units(day, int(n), unit)
     if op == "on_date":
         # «Ya llegó la fecha elegida»: desde ese día, avisa de las filas que tienen una fecha.
-        day, target = to_date(left), to_date(right)
+        day, target = to_date_loose(left), to_date(right)
         return day is not None and target is not None and (today_day() if today is None else today) >= target
     if op == "is_empty":
         return is_empty(left)

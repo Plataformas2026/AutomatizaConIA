@@ -1,5 +1,6 @@
 'use client';
 
+import { AdminUserSelect } from './AdminUserSelect';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -73,6 +74,8 @@ const SEVERITIES = [
 ] as const;
 
 interface Props {
+  /** Solo administradores: dueño del archivo (la regla se crea a su nombre). */
+  ownerUserId?: string;
   fileId: string;
   fileName: string;
   initialRules: RuleRow[];
@@ -84,7 +87,7 @@ interface Props {
   hasSheets: boolean;
 }
 
-export function RulesPanel({ fileId, fileName, initialRules, columns, columnsError, active, hasSheets }: Props) {
+export function RulesPanel({ ownerUserId, fileId, fileName, initialRules, columns, columnsError, active, hasSheets }: Props) {
   const router = useRouter();
 
   // Formulario: [Variable 1] [Operador] [Variable 2 | Valor fijo]
@@ -114,13 +117,15 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
     setRightColumn((cur) => (names.includes(cur) ? cur : (names[1] ?? names[0])));
   }, [columns]);
 
+  // La detección de fechas es solo una pista: las opciones de calendario se ofrecen SIEMPRE.
   const leftIsDate = !!columns?.find((c) => c.name === left)?.isDate;
-  const valueIsDate = leftIsDate && COMPARATORS.includes(operator);
+  const [valueAsDate, setValueAsDate] = useState(false);
+  const valueIsDate = valueAsDate && COMPARATORS.includes(operator);
 
-  // Las opciones de fecha solo existen para columnas de fecha.
+  // Al cambiar de columna, el valor fijo se propone como calendario solo si parece de fechas.
   useEffect(() => {
-    if (!leftIsDate && isDateOperator(operator)) setOperator('gt');
-  }, [leftIsDate, operator]);
+    setValueAsDate(leftIsDate);
+  }, [leftIsDate, left]);
   // El valor fijo cambia de tipo (texto ↔ calendario): se vacía para no dejar algo inválido.
   useEffect(() => {
     setRightValue('');
@@ -128,10 +133,11 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
 
   function columnLabel(c: ColumnInfo): string {
     // Con varias hojas, avisa de las columnas que no están en todas.
+    const base = c.isDate ? `${c.name} · fecha` : c.name;
     if (active.length > 1 && c.sheets.length > 0 && c.sheets.length < active.length) {
-      return `${c.name} (solo en ${c.sheets.join(', ')})`;
+      return `${base} (solo en ${c.sheets.join(', ')})`;
     }
-    return c.name;
+    return base;
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -247,6 +253,14 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
       <section className="panel" aria-labelledby="new-rule-title">
         <h2 id="new-rule-title">Nueva regla</h2>
         <form onSubmit={onSubmit}>
+          {ownerUserId && (
+            <AdminUserSelect
+              value={ownerUserId}
+              disabled
+              label="Regla para"
+              hint="La regla pertenece al dueño del archivo y se ejecuta en su cuenta y en su agente. Para otra persona, abre uno de sus archivos desde Administración."
+            />
+          )}
           {columnsError && <p className="err">{columnsError}</p>}
           {!columns && !columnsError && <p className="muted">Leyendo las columnas de tu archivo…</p>}
 
@@ -288,15 +302,13 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
                         {OPERATOR_LABELS[o]}
                       </option>
                     ))}
-                    {leftIsDate && (
-                      <optgroup label="Para fechas">
-                        {DATE_OPERATORS.map((o) => (
-                          <option key={o} value={o}>
-                            {OPERATOR_LABELS[o]}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
+                    <optgroup label="Para fechas (con calendario)">
+                      {DATE_OPERATORS.map((o) => (
+                        <option key={o} value={o}>
+                          {OPERATOR_LABELS[o]}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
 
@@ -324,8 +336,15 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
                       </select>
                     </div>
                     <span className="muted">
-                      Avisa cuando hayan pasado al menos esos días (o semanas, meses…) desde la fecha de cada celda.
+                      Avisa cuando hayan pasado al menos esos días (semanas, meses…) desde la fecha de cada fila. Ejemplo: 6
+                      meses avisa cuando se cumplan 6 meses desde la fecha de la columna.
                     </span>
+                    {!leftIsDate && (
+                      <span className="muted">
+                        Esta columna no parece de fechas, pero puedes usar la opción igualmente. Si alguna celda no se lee
+                        como fecha, el agente lo anota en su registro y la ignora.
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -336,6 +355,9 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
                     <span className="muted">
                       Desde ese día avisa de las filas que tengan una fecha en esta columna. La comprobación se repite cada día.
                     </span>
+                    {!leftIsDate && (
+                      <span className="muted">Esta columna no parece de fechas, pero puedes usar la opción igualmente.</span>
+                    )}
                   </div>
                 )}
 
@@ -375,6 +397,12 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
                         />
                       )}
                     </div>
+                    {rightType === 'value' && COMPARATORS.includes(operator) && (
+                      <label className="choice" style={{ marginTop: 6 }}>
+                        <input type="checkbox" checked={valueAsDate} onChange={(e) => setValueAsDate(e.target.checked)} />
+                        <span>Elegir el valor en un calendario</span>
+                      </label>
+                    )}
                   </div>
                 )}
               </div>

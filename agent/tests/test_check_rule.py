@@ -42,6 +42,37 @@ class DateOperators(unittest.TestCase):
         for c in data["cases"]:
             self.assertEqual(e.compare(c["left"], c["op"], c["right"], c["unit"], today), c["expected"], c)
 
+    def test_date_reader_same_as_web(self):
+        import json
+        from datetime import date, timedelta
+        from pathlib import Path
+
+        data = json.loads((Path(__file__).parent / "date_cases.json").read_text(encoding="utf-8"))
+        iso = lambda n: "null" if n is None else (date(1970, 1, 1) + timedelta(days=n)).isoformat()
+        for text, expected in data["parse"]:
+            self.assertEqual(iso(e.to_date(text)), expected, text)
+        for value, expected in data["loose"]:
+            self.assertEqual(iso(e.to_date_loose(value)), expected, value)
+
+    def test_unreadable_and_hint(self):
+        rule = e.check_rule({"id": "1", "name": "n", "actions": [{"type": "alert", "message": "m"}],
+                             "condition": {"kind": "compare", "left": {"type": "column", "column": "Alta"},
+                                           "operator": "elapsed", "unit": "months", "right": {"type": "value", "value": 6}}})[0]
+        table = e.Table(["Alta"], [e.Row(2, {"Alta": "15/10/2026"}), e.Row(3, {"Alta": "pronto"}), e.Row(4, {"Alta": None}), e.Row(5, {"Alta": 45123})])
+        self.assertEqual(e.unreadable_dates(rule, table), [3])
+        self.assertTrue(e.looks_like_dates(["pronto", "15/10/2026", "n/a"], "Fecha de alta"))
+        self.assertFalse(e.looks_like_dates(["pronto", "15/10/2026", "n/a"], "Notas"))
+
+    def test_six_months_use_case(self):
+        rule = e.check_rule({"id": "1", "name": "n", "actions": [{"type": "alert", "message": "m"}],
+                             "condition": {"kind": "compare", "left": {"type": "column", "column": "Alta"},
+                                           "operator": "elapsed", "unit": "months", "right": {"type": "value", "value": 6}}})[0]
+        table = e.Table(["Alta"], [e.Row(2, {"Alta": "14/04/2026"}), e.Row(3, {"Alta": "15/04/2026"}),
+                                    e.Row(4, {"Alta": "31-ago-25"}), e.Row(5, {"Alta": "pronto"})])
+        from datetime import date
+        self.assertEqual(e.evaluate_rule(rule, table, e.today_day(date(2026, 10, 14)))[0], [2, 4])
+        self.assertEqual(e.evaluate_rule(rule, table, e.today_day(date(2026, 10, 15)))[0], [2, 3, 4])
+
     def test_add_units(self):
         day = lambda iso: e.to_date(iso)
         self.assertEqual(e.add_units(day("2026-01-31"), 1, "months"), day("2026-02-28"))

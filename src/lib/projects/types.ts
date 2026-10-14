@@ -46,5 +46,7 @@ export const PROJECT_ERRORS: Record<string, string> = {
   too_many_projects: `Has llegado al máximo de ${MAX_PROJECTS} proyectos.`,
   invalid_cover: 'La imagen de portada no es válida.',
   not_found: 'No se encontró el proyecto.',
+  forbidden: 'No tienes permiso para actuar en nombre de otra persona.',
+  user_not_found: 'Ese usuario ya no existe.',
   db_error: 'No se pudo guardar. Inténtalo de nuevo.',
 };

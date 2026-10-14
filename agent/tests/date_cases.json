@@ -1,30 +1,344 @@
 {
   "today": "2026-10-14",
   "cases": [
-    {"left": "2026-10-07", "op": "elapsed", "right": 7, "unit": "days", "expected": true},
-    {"left": "2026-10-08", "op": "elapsed", "right": 7, "unit": "days", "expected": false},
-    {"left": "14/09/2026", "op": "elapsed", "right": 30, "unit": "days", "expected": true},
-    {"left": "2026-09-30", "op": "elapsed", "right": 2, "unit": "weeks", "expected": true},
-    {"left": "2026-10-01", "op": "elapsed", "right": 2, "unit": "weeks", "expected": false},
-    {"left": "2026-09-14", "op": "elapsed", "right": 1, "unit": "months", "expected": true},
-    {"left": "2026-09-15", "op": "elapsed", "right": 1, "unit": "months", "expected": false},
-    {"left": "2026-08-31", "op": "elapsed", "right": 1, "unit": "months", "expected": true},
-    {"left": "2026-01-31", "op": "elapsed", "right": 1, "unit": "months", "expected": true},
-    {"left": "2025-10-14", "op": "elapsed", "right": 1, "unit": "years", "expected": true},
-    {"left": "2025-10-15", "op": "elapsed", "right": 1, "unit": "years", "expected": false},
-    {"left": "2024-02-29", "op": "elapsed", "right": 1, "unit": "years", "expected": true},
-    {"left": "2026-10-14", "op": "elapsed", "right": 0, "unit": "days", "expected": true},
-    {"left": "2026-10-20", "op": "elapsed", "right": 0, "unit": "days", "expected": false},
-    {"left": "", "op": "elapsed", "right": 5, "unit": "days", "expected": false},
-    {"left": "no es fecha", "op": "elapsed", "right": 5, "unit": "days", "expected": false},
-    {"left": 45000, "op": "elapsed", "right": 5, "unit": "days", "expected": false},
-    {"left": "2026-01-01", "op": "elapsed", "right": 1.5, "unit": "days", "expected": false},
-    {"left": "2026-01-01", "op": "elapsed", "right": -1, "unit": "days", "expected": false},
-    {"left": "2026-01-01", "op": "elapsed", "right": "30", "unit": "days", "expected": true},
-    {"left": "2026-03-01", "op": "on_date", "right": "2026-10-14", "unit": "days", "expected": true},
-    {"left": "2026-03-01", "op": "on_date", "right": "2026-10-15", "unit": "days", "expected": false},
-    {"left": "", "op": "on_date", "right": "2026-10-01", "unit": "days", "expected": false},
-    {"left": "texto", "op": "on_date", "right": "2026-10-01", "unit": "days", "expected": false},
-    {"left": "2026-03-01", "op": "on_date", "right": "mal", "unit": "days", "expected": false}
+    {
+      "left": "2026-10-07",
+      "op": "elapsed",
+      "right": 7,
+      "unit": "days",
+      "expected": true
+    },
+    {
+      "left": "2026-10-08",
+      "op": "elapsed",
+      "right": 7,
+      "unit": "days",
+      "expected": false
+    },
+    {
+      "left": "14/09/2026",
+      "op": "elapsed",
+      "right": 30,
+      "unit": "days",
+      "expected": true
+    },
+    {
+      "left": "2026-09-30",
+      "op": "elapsed",
+      "right": 2,
+      "unit": "weeks",
+      "expected": true
+    },
+    {
+      "left": "2026-10-01",
+      "op": "elapsed",
+      "right": 2,
+      "unit": "weeks",
+      "expected": false
+    },
+    {
+      "left": "2026-09-14",
+      "op": "elapsed",
+      "right": 1,
+      "unit": "months",
+      "expected": true
+    },
+    {
+      "left": "2026-09-15",
+      "op": "elapsed",
+      "right": 1,
+      "unit": "months",
+      "expected": false
+    },
+    {
+      "left": "2026-08-31",
+      "op": "elapsed",
+      "right": 1,
+      "unit": "months",
+      "expected": true
+    },
+    {
+      "left": "2026-01-31",
+      "op": "elapsed",
+      "right": 1,
+      "unit": "months",
+      "expected": true
+    },
+    {
+      "left": "2025-10-14",
+      "op": "elapsed",
+      "right": 1,
+      "unit": "years",
+      "expected": true
+    },
+    {
+      "left": "2025-10-15",
+      "op": "elapsed",
+      "right": 1,
+      "unit": "years",
+      "expected": false
+    },
+    {
+      "left": "2024-02-29",
+      "op": "elapsed",
+      "right": 1,
+      "unit": "years",
+      "expected": true
+    },
+    {
+      "left": "2026-10-14",
+      "op": "elapsed",
+      "right": 0,
+      "unit": "days",
+      "expected": true
+    },
+    {
+      "left": "2026-10-20",
+      "op": "elapsed",
+      "right": 0,
+      "unit": "days",
+      "expected": false
+    },
+    {
+      "left": "",
+      "op": "elapsed",
+      "right": 5,
+      "unit": "days",
+      "expected": false
+    },
+    {
+      "left": "no es fecha",
+      "op": "elapsed",
+      "right": 5,
+      "unit": "days",
+      "expected": false
+    },
+    {
+      "left": 45000,
+      "op": "elapsed",
+      "right": 5,
+      "unit": "days",
+      "expected": true
+    },
+    {
+      "left": "2026-01-01",
+      "op": "elapsed",
+      "right": 1.5,
+      "unit": "days",
+      "expected": false
+    },
+    {
+      "left": "2026-01-01",
+      "op": "elapsed",
+      "right": -1,
+      "unit": "days",
+      "expected": false
+    },
+    {
+      "left": "2026-01-01",
+      "op": "elapsed",
+      "right": "30",
+      "unit": "days",
+      "expected": true
+    },
+    {
+      "left": "2026-03-01",
+      "op": "on_date",
+      "right": "2026-10-14",
+      "unit": "days",
+      "expected": true
+    },
+    {
+      "left": "2026-03-01",
+      "op": "on_date",
+      "right": "2026-10-15",
+      "unit": "days",
+      "expected": false
+    },
+    {
+      "left": "",
+      "op": "on_date",
+      "right": "2026-10-01",
+      "unit": "days",
+      "expected": false
+    },
+    {
+      "left": "texto",
+      "op": "on_date",
+      "right": "2026-10-01",
+      "unit": "days",
+      "expected": false
+    },
+    {
+      "left": "2026-03-01",
+      "op": "on_date",
+      "right": "mal",
+      "unit": "days",
+      "expected": false
+    }
+  ],
+  "parse": [
+    [
+      "15/10/2026",
+      "2026-10-15"
+    ],
+    [
+      "5/1/2026",
+      "2026-01-05"
+    ],
+    [
+      "15-10-2026",
+      "2026-10-15"
+    ],
+    [
+      "15.10.2026",
+      "2026-10-15"
+    ],
+    [
+      "15/10/26",
+      "2026-10-15"
+    ],
+    [
+      "15/10/70",
+      "1970-10-15"
+    ],
+    [
+      "15/10/69",
+      "2069-10-15"
+    ],
+    [
+      "2026-10-15",
+      "2026-10-15"
+    ],
+    [
+      "2026/10/15",
+      "2026-10-15"
+    ],
+    [
+      "2026-10-15T10:30:00",
+      "2026-10-15"
+    ],
+    [
+      "2026-10-15 10:30",
+      "2026-10-15"
+    ],
+    [
+      "14/10/2026 0:00:00",
+      "2026-10-14"
+    ],
+    [
+      "14/10/2026 23:59",
+      "2026-10-14"
+    ],
+    [
+      "  14/10/2026  ",
+      "2026-10-14"
+    ],
+    [
+      "15-oct-2026",
+      "2026-10-15"
+    ],
+    [
+      "15 oct 2026",
+      "2026-10-15"
+    ],
+    [
+      "15 Oct. 26",
+      "2026-10-15"
+    ],
+    [
+      "15 de octubre de 2026",
+      "2026-10-15"
+    ],
+    [
+      "1º de marzo de 2026",
+      "2026-03-01"
+    ],
+    [
+      "5 sept 2026",
+      "2026-09-05"
+    ],
+    [
+      "3 Dec 2026",
+      "2026-12-03"
+    ],
+    [
+      "20 de Agosto 2026",
+      "2026-08-20"
+    ],
+    [
+      "31/04/26",
+      "null"
+    ],
+    [
+      "31/04/2026",
+      "2026-05-01"
+    ],
+    [
+      "32/01/2026",
+      "2026-02-01"
+    ],
+    [
+      "15 xyz 2026",
+      "null"
+    ],
+    [
+      "marketing 2026",
+      "null"
+    ],
+    [
+      "hola",
+      "null"
+    ],
+    [
+      "",
+      "null"
+    ],
+    [
+      "12345",
+      "null"
+    ],
+    [
+      "1,5",
+      "null"
+    ],
+    [
+      "2026",
+      "null"
+    ]
+  ],
+  "loose": [
+    [
+      45123,
+      "2023-07-16"
+    ],
+    [
+      "45123",
+      "2023-07-16"
+    ],
+    [
+      45123.75,
+      "2023-07-16"
+    ],
+    [
+      2026,
+      "null"
+    ],
+    [
+      500,
+      "null"
+    ],
+    [
+      99999,
+      "null"
+    ],
+    [
+      true,
+      "null"
+    ],
+    [
+      "abc",
+      "null"
+    ]
   ]
 }

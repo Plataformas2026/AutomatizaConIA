@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation';
 import { getSessionContext } from '@/lib/auth';
 import { AlertsProvider } from '@/components/AlertsProvider';
+import { AdminProvider } from '@/components/AdminProvider';
 import { NavTabs } from '@/components/NavTabs';
 import { BrandMark } from '@/components/Icons';
 import '@/styles/sharing.css';
+import '@/styles/admin.css';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getSessionContext();
@@ -16,6 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .eq('status', 'open');
 
   return (
+    <AdminProvider isAdmin={ctx.isAdmin}>
     <AlertsProvider companyId={ctx.companyId} initialUnread={count ?? 0}>
       <header className="topbar">
         <div className="topbar-inner">
@@ -23,7 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <BrandMark size={30} />
             Automatización con IA
           </span>
-          <NavTabs />
+          <NavTabs isAdmin={ctx.isAdmin} />
           <form action="/auth/signout" method="post" className="signout">
             <button className="btn ghost">Salir</button>
           </form>
@@ -31,5 +34,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
       <main className="container">{children}</main>
     </AlertsProvider>
+    </AdminProvider>
   );
 }

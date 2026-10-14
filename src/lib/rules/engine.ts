@@ -52,22 +52,81 @@ function toDay(ms: number): number {
   return Math.floor((ms + DAY_TOLERANCE_MS) / DAY_MS);
 }
 
-/** Fechas: objetos Date (xlsx), ISO (2026-10-09) o dd/mm/aaaa. Se comparan por día. */
+const MONTHS: Record<string, number> = {
+  ene: 1, jan: 1, feb: 2, mar: 3, abr: 4, apr: 4, may: 5, jun: 6, jul: 7, ago: 8, aug: 8,
+  sep: 9, set: 9, oct: 10, nov: 11, dic: 12, dec: 12,
+};
+// Sufijo opcional de hora: «14/10/2026 10:30», «2026-10-14T10:30:00Z», «14/10/2026 0:00:00».
+const TIME_TAIL = '(?:[ T,]+\\d{1,2}:\\d{2}(?::\\d{2}(?:[.,]\\d+)?)?(?:\\s?[ap]\\.?m\\.?)?(?:Z|[+-]\\d{2}:?\\d{2})?)?';
+
+function ymd(y: number, mo: number, d: number): number | null {
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const ms = Date.UTC(y, mo - 1, d);
+  const check = new Date(ms);
+  return check.getUTCMonth() === mo - 1 ? toDay(ms) : null; // 31/04 no existe
+}
+
+function fullYear(yy: string): number {
+  if (yy.length === 4) return Number(yy);
+  const n = Number(yy);
+  return n <= 69 ? 2000 + n : 1900 + n;
+}
+
+/** Fechas en texto: ISO (2026-10-09, 2026/10/09), dd/mm/aaaa y dd/mm/aa (también con - o .), con hora opcional,
+ *  y con el mes escrito («15 oct 2026», «15-oct-26», «15 de octubre de 2026»). Se asume día/mes/año (España). */
+function parseDateText(raw: string): number | null {
+  const s = raw.trim().replace(/\s+/g, ' ');
+  if (!s) return null;
+
+  let m = s.match(new RegExp(`^(\\d{4})[-/.](\\d{1,2})[-/.](\\d{1,2})${TIME_TAIL}$`));
+  if (m) {
+    // ISO con hora y zona («…Z» / «+02:00»): respeta el instante, como siempre.
+    if (/^\d{4}-\d{2}-\d{2}[T ]\d/.test(s) && /(Z|[+-]\d{2}:?\d{2})$/.test(s)) {
+      const ms = Date.parse(s.replace(' ', 'T'));
+      return Number.isNaN(ms) ? null : toDay(ms);
+    }
+    return ymd(Number(m[1]), Number(m[2]), Number(m[3]));
+  }
+
+  m = s.match(new RegExp(`^(\\d{1,2})[/.-](\\d{1,2})[/.-](\\d{4}|\\d{2})${TIME_TAIL}$`));
+  if (m) {
+    const y = fullYear(m[3]);
+    const mo = Number(m[2]);
+    // Compatibilidad: con año de 4 cifras, un día/mes fuera de rango «desborda» (31/02 → 3 mar), como antes.
+    if (m[3].length === 4) {
+      const ms = Date.UTC(y, mo - 1, Number(m[1]));
+      return Number.isNaN(ms) ? null : toDay(ms);
+    }
+    return ymd(y, mo, Number(m[1]));
+  }
+
+  m = s.match(new RegExp(`^(\\d{1,2})º?[ /.-]*(?:de )?([a-záéíóúñ]{3,12})\\.?[ /.,-]*(?:de )?(\\d{4}|\\d{2})${TIME_TAIL}$`, 'i'));
+  if (m) {
+    const mo = MONTHS[m[2].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').slice(0, 3)];
+    return mo ? ymd(fullYear(m[3]), mo, Number(m[1])) : null;
+  }
+  return null;
+}
+
+/** Número de serie de Excel (días desde 1899-12-30) → nº de días desde 1970. Solo 1927–2118, para no confundir números normales. */
+function fromExcelSerial(n: number): number | null {
+  return Number.isFinite(n) && n >= 10_000 && n <= 80_000 ? Math.floor(n) - 25_569 : null;
+}
+
+/** Fechas: objetos Date (xlsx) o texto en los formatos de arriba. Se comparan por día. */
 export function toDate(v: unknown): number | null {
   if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : toDay(v.getTime());
   if (typeof v !== 'string') return null;
-  const s = v.trim();
+  return parseDateText(v);
+}
 
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-    const ms = Date.parse(s.length === 10 ? `${s}T00:00:00Z` : s);
-    return Number.isNaN(ms) ? null : toDay(ms);
-  }
-  const m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
-  if (m) {
-    const [, d, mo, y] = m;
-    const ms = Date.UTC(Number(y), Number(mo) - 1, Number(d));
-    return Number.isNaN(ms) ? null : toDay(ms);
-  }
+/** Como `toDate`, pero además acepta el número de serie de Excel (45123 = 16/07/2023): para columnas que el
+ *  usuario ha marcado como fecha en «ha pasado al menos…» y «ya llegó la fecha». */
+export function toDateLoose(v: unknown): number | null {
+  const d = toDate(v);
+  if (d !== null) return d;
+  if (typeof v === 'number') return fromExcelSerial(v);
+  if (typeof v === 'string' && /^\d{5}(\.\d+)?$/.test(v.trim())) return fromExcelSerial(Number(v));
   return null;
 }
 
@@ -89,8 +148,11 @@ export function addUnits(day: number, n: number, unit: TimeUnit): number {
   return Math.floor(Date.UTC(y, m, Math.min(d.getUTCDate(), last)) / DAY_MS);
 }
 
-/** ¿Más de la mitad de los valores con contenido son fechas? (para ofrecer las opciones de fecha). */
-export function looksLikeDates(values: unknown[]): boolean {
+const DATE_HEADER = /fecha|date|\balta\b|\bbaja\b|venc|caduc|nacim|inicio|fin\b|plazo|expir|entrega|emisi|cita|renov/i;
+
+/** ¿Parece una columna de fecha? Basta con que el 60 % de los valores con contenido lo sean (30 % si el
+ *  nombre de la columna lo sugiere: «Fecha alta», «Vencimiento»…). Es solo una pista: el calendario se ofrece siempre. */
+export function looksLikeDates(values: unknown[], header = ''): boolean {
   let filled = 0;
   let dates = 0;
   for (const v of values) {
@@ -99,7 +161,15 @@ export function looksLikeDates(values: unknown[]): boolean {
     if (toDate(v) !== null) dates++;
     if (filled >= 200) break;
   }
-  return filled > 0 && dates / filled >= 0.6;
+  if (filled === 0) return false;
+  return dates / filled >= (DATE_HEADER.test(header) ? 0.3 : 0.6);
+}
+
+/** Nº de celdas con contenido de la columna que NO se reconocen como fecha (para avisar sin enseñar datos). */
+export function countUnreadableDates(values: unknown[]): number {
+  let n = 0;
+  for (const v of values) if (!isEmpty(v) && toDateLoose(v) === null) n++;
+  return n;
 }
 
 function text(v: unknown): string {
@@ -133,14 +203,14 @@ export function compare(left: unknown, op: Operator, right: unknown, ctx: Compar
   switch (op) {
     case 'elapsed': {
       // «Han pasado al menos N días/semanas/meses/años desde la fecha de la celda».
-      const day = toDate(left);
+      const day = toDateLoose(left);
       const n = toNumber(right);
       if (day === null || n === null || !Number.isInteger(n) || n < 0 || n > MAX_ELAPSED) return false;
       return (ctx.today ?? todayDay()) >= addUnits(day, n, ctx.unit ?? 'days');
     }
     case 'on_date': {
       // «Ya llegó la fecha elegida»: desde ese día, avisa de las filas que tienen una fecha.
-      const day = toDate(left);
+      const day = toDateLoose(left);
       const target = toDate(right);
       return day !== null && target !== null && (ctx.today ?? todayDay()) >= target;
     }

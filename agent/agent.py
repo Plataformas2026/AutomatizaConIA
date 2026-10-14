@@ -35,7 +35,7 @@ import engine
 import outlook
 import readers
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 LOCK_PORT = 47653  # evita dos agentes a la vez (se libera sola al cerrar)
 log = logging.getLogger("agente")
 
@@ -308,6 +308,8 @@ class Agent:
                 self.api.report_rule(fid, str(raw.get("id")), None, f"Regla no válida: {why}"[:300], None)
                 continue
             ev = engine.evaluate_across_sheets(rule, wb.sheets)
+            if rule.operator in engine.TIME_OPERATORS:
+                self._warn_unreadable_dates(name, rule, wb.sheets)
             if ev.error:
                 self.api.report_rule(fid, rule.id, None, ev.error, None)
                 continue
@@ -322,6 +324,18 @@ class Agent:
         st.pop("reported_error", None)
         self.state.save()
         log.info("«%s»: %d regla(s) evaluadas, %d aviso(s) nuevo(s)", name, len(rules), new_alerts)
+
+    @staticmethod
+    def _warn_unreadable_dates(file_name: str, rule: engine.Rule, sheets: list) -> None:
+        """Avisa en el log (solo nº de fila, nunca datos) de celdas de la columna que no se leen como fecha."""
+        for s in sheets:
+            if rule.left not in s.table.headers:
+                continue
+            bad = engine.unreadable_dates(rule, s.table)
+            if bad:
+                log.warning("«%s»%s: %d celda(s) de «%s» no se reconocen como fecha (filas %s%s). Se ignoran.",
+                            file_name, f" hoja «{s.sheet_name}»" if s.sheet_name else "", len(bad), rule.left,
+                            ", ".join(map(str, bad[:10])), "…" if len(bad) > 10 else "")
 
     # ── Correos (Outlook) ───────────────────────────────────────────────
     def process_outbox(self) -> None:

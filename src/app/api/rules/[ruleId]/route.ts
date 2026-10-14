@@ -1,6 +1,7 @@
 import { after } from 'next/server';
 import { NextResponse } from 'next/server';
 import { getSessionContext } from '@/lib/auth';
+import { audit, dbForResource } from '@/lib/admin';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { updateRuleSchema } from '@/lib/rules/types';
 import { processFile } from '@/lib/pipeline/process-file';
@@ -16,14 +17,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ruleId
   if (!parsed.success) return NextResponse.json({ error: 'invalid_body' }, { status: 400 });
   const patch = parsed.data;
 
-  const { data: rule, error } = await ctx.supabase
+  const { data: rule, error } = await dbForResource(ctx)
     .from('rules')
     .update(patch)
     .eq('id', ruleId)
-    .select('id, file_id, name, enabled, condition, actions, last_error, last_evaluated_at')
+    .select('id, file_id, company_id, name, enabled, condition, actions, last_error, last_evaluated_at')
     .maybeSingle();
   if (error) return NextResponse.json({ error: 'db_error' }, { status: 500 });
   if (!rule) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  await audit(ctx, rule.company_id as string, 'rule.update', 'rule', rule.id);
 
   // Si cambia lo que la regla evalúa (o se reactiva), se reinicia su huella
   // para que pueda volver a alertar, y se reevalúa ahora.
@@ -48,7 +50,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ruleId
       });
     }
   }
-  return NextResponse.json(rule);
+  const { company_id: _c, ...out } = rule;
+  return NextResponse.json(out);
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ ruleId: string }> }) {
@@ -56,7 +59,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ rule
   const ctx = await getSessionContext();
   if (!ctx) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
-  const { error } = await ctx.supabase.from('rules').delete().eq('id', ruleId);
+  const { data, error } = await dbForResource(ctx).from('rules').delete().eq('id', ruleId).select('id, company_id');
   if (error) return NextResponse.json({ error: 'db_error' }, { status: 500 });
+  if (data?.[0]) await audit(ctx, data[0].company_id as string, 'rule.delete', 'rule', ruleId);
   return NextResponse.json({ ok: true });
 }

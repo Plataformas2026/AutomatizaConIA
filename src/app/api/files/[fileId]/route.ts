@@ -1,6 +1,7 @@
 import { after, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSessionContext } from '@/lib/auth';
+import { audit, dbForResource } from '@/lib/admin';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { decrypt } from '@/lib/crypto';
 import { getAccessToken } from '@/lib/google/oauth';
@@ -29,15 +30,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ fileId
   if (!body.success) return NextResponse.json({ error: 'invalid_body' }, { status: 400 });
 
   // RLS: si el archivo no es de su empresa, no aparece.
-  const { data: file } = await ctx.supabase
-    .from('shared_files_metadata')
-    .select('id, mime_type, source')
-    .eq('id', fileId)
-    .eq('company_id', ctx.companyId)
-    .maybeSingle();
+  let fileQuery = dbForResource(ctx).from('shared_files_metadata').select('id, mime_type, source, company_id').eq('id', fileId);
+  if (!ctx.isAdmin) fileQuery = fileQuery.eq('company_id', ctx.companyId);
+  const { data: file } = await fileQuery.maybeSingle();
   if (!file) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   if (file.mime_type === 'text/csv') return NextResponse.json({ error: 'no_sheets' }, { status: 400 });
 
+  await audit(ctx, file.company_id as string, 'file.sheets', 'file', file.id);
   const selection = normalizeSelection(body.data.sheetMode, body.data.sheetNames);
   const { error } = await createAdminClient()
     .from('shared_files_metadata')
@@ -66,14 +65,12 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ file
   if (!ctx) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
   // RLS: si el archivo no es de su empresa, no aparece.
-  const { data: file } = await ctx.supabase
-    .from('shared_files_metadata')
-    .select('id, google_token_id, watch_channel_id, watch_resource_id')
-    .eq('id', fileId)
-    .eq('company_id', ctx.companyId)
-    .maybeSingle();
+  let fileQuery = dbForResource(ctx).from('shared_files_metadata').select('id, google_token_id, watch_channel_id, watch_resource_id, company_id').eq('id', fileId);
+  if (!ctx.isAdmin) fileQuery = fileQuery.eq('company_id', ctx.companyId);
+  const { data: file } = await fileQuery.maybeSingle();
   if (!file) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
+  await audit(ctx, file.company_id as string, 'file.delete', 'file', file.id);
   const admin = createAdminClient();
 
   if (file.watch_channel_id && file.watch_resource_id) {

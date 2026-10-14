@@ -32,7 +32,9 @@ export function FileWorkspace({
   fileName,
   isCsv,
   initialRules,
+  ownerUserId,
 }: {
+  ownerUserId?: string;
   fileId: string;
   fileName: string;
   isCsv: boolean;
@@ -138,6 +140,7 @@ export function FileWorkspace({
       )}
 
       <RulesPanel
+        ownerUserId={ownerUserId}
         fileId={fileId}
         fileName={fileName}
         initialRules={initialRules}

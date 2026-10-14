@@ -95,7 +95,7 @@ def _build_table(rows: Iterable[tuple[int, list[Any]]], header_only: bool = Fals
 
 def _table_info(sheet: Optional[str], table: Table) -> dict:
     """Estructura de una hoja: SOLO nombres de columnas y cuáles son de fecha (sin valores)."""
-    dates = [h for h in table.headers if looks_like_dates([row.values.get(h) for row in table.rows])]
+    dates = [h for h in table.headers if looks_like_dates([row.values.get(h) for row in table.rows], h)]
     return {"sheet": sheet, "columns": table.headers, "dateColumns": dates}
 
 

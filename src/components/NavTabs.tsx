@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAlerts } from './AlertsProvider';
-import { IconBell, IconChart, IconGrid, IconMail, IconSpark } from './Icons';
+import { IconBell, IconChart, IconGrid, IconMail, IconSpark, IconUsers } from './Icons';
 
 /** Barra de pestañas: la sección actual queda marcada con color, subrayado y aria-current. */
-export function NavTabs() {
+export function NavTabs({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
   const { unread } = useAlerts();
 
@@ -15,6 +15,7 @@ export function NavTabs() {
   const onAlerts = pathname.startsWith('/alerts');
   const onStats = pathname.startsWith('/stats');
   const onModels = pathname.startsWith('/models');
+  const onAdmin = pathname.startsWith('/admin');
   const badge = unread > 99 ? '99+' : `+${unread}`;
 
   return (
@@ -72,6 +73,17 @@ export function NavTabs() {
         <IconSpark size={18} />
         Informes y Modelos IA
       </Link>
+      {isAdmin && (
+        <Link
+          href="/admin"
+          className={`tab ${onAdmin ? 'is-active' : ''}`}
+          style={{ ['--tab-color' as string]: 'var(--ink, #1f1a3a)' }}
+          aria-current={onAdmin ? 'page' : undefined}
+        >
+          <IconUsers size={18} />
+          Administración
+        </Link>
+      )}
     </nav>
   );
 }

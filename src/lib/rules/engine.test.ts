@@ -115,7 +115,7 @@ test('evaluateRuleAcrossSheets: error solo si ninguna hoja tiene las columnas', 
 /* ── Operadores de fecha (casos compartidos con el agente de Python) ── */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { addUnits, looksLikeDates, todayDay } from './engine';
+import { addUnits, countUnreadableDates, looksLikeDates, todayDay, toDateLoose } from './engine';
 import { conditionSchema } from './types';
 
 const DATE_CASES = JSON.parse(readFileSync(join(__dirname, '../../../agent/tests/date_cases.json'), 'utf8')) as {
@@ -173,4 +173,17 @@ test('evaluateRule con elapsed y la validación de la condición', () => {
   const onDate = { ...condition, operator: 'on_date' as const, unit: undefined, right: { type: 'value' as const, value: '2026-12-01' } };
   assert.equal(conditionSchema.safeParse(onDate).success, true);
   assert.equal(conditionSchema.safeParse({ ...onDate, right: { type: 'value', value: '01/12/2026' } }).success, false);
+});
+
+test('lector de fechas: mismos formatos y resultados que el agente', () => {
+  const iso = (n: number | null) => (n === null ? 'null' : new Date(n * 86_400_000).toISOString().slice(0, 10));
+  const parse = DATE_CASES as unknown as { parse: [string, string][]; loose: [unknown, string][] };
+  for (const [text, expected] of parse.parse) assert.equal(iso(toDate(text)), expected, `toDate(${JSON.stringify(text)})`);
+  for (const [value, expected] of parse.loose) assert.equal(iso(toDateLoose(value)), expected, `toDateLoose(${JSON.stringify(value)})`);
+});
+
+test('countUnreadableDates y pista por nombre de columna', () => {
+  assert.equal(countUnreadableDates(['15/10/2026', 'pronto', null, 45123, '']), 1);
+  assert.equal(looksLikeDates(['pronto', '15/10/2026', 'n/a'], 'Fecha de alta'), true); // 1 de 3 = 33 % basta con pista
+  assert.equal(looksLikeDates(['pronto', '15/10/2026', 'n/a'], 'Notas'), false);
 });

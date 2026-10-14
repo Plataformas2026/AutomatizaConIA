@@ -1,6 +1,7 @@
 import { after } from 'next/server';
 import { NextResponse } from 'next/server';
 import { getSessionContext } from '@/lib/auth';
+import { audit, dbForResource } from '@/lib/admin';
 import { createRuleSchema } from '@/lib/rules/types';
 import { processFile } from '@/lib/pipeline/process-file';
 
@@ -18,16 +19,15 @@ export async function POST(req: Request) {
   }
   const { fileId, name, condition, actions } = parsed.data;
 
-  // RLS garantiza que el archivo es de la empresa del usuario.
-  const { data: file } = await ctx.supabase
-    .from('shared_files_metadata')
-    .select('id, company_id, source')
-    .eq('id', fileId)
-    .eq('company_id', ctx.companyId)
-    .maybeSingle();
+  // Usuario normal: RLS + company_id de la sesión. Administrador: cualquier archivo; la regla
+  // se guarda con la empresa del propio archivo (así llega al agente y a las alertas de su dueño).
+  const db = dbForResource(ctx);
+  let fileQuery = db.from('shared_files_metadata').select('id, company_id, source').eq('id', fileId);
+  if (!ctx.isAdmin) fileQuery = fileQuery.eq('company_id', ctx.companyId);
+  const { data: file } = await fileQuery.maybeSingle();
   if (!file) return NextResponse.json({ error: 'file_not_found' }, { status: 404 });
 
-  const { data: rule, error } = await ctx.supabase
+  const { data: rule, error } = await db
     .from('rules')
     .insert({
       company_id: file.company_id,
@@ -40,6 +40,8 @@ export async function POST(req: Request) {
     .select('id, name, enabled, condition, actions, last_error, last_evaluated_at')
     .single();
   if (error) return NextResponse.json({ error: 'db_error' }, { status: 500 });
+
+  await audit(ctx, file.company_id as string, 'rule.create', 'rule', rule.id);
 
   // force: evalúa ya, aunque la versión del archivo no haya cambiado.
   // Archivo local: lo evalúa el agente del PC en su próxima sincronización (≤ 1 min).

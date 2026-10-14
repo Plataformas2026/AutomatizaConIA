@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionContext } from '@/lib/auth';
+import { dbForResource } from '@/lib/admin';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { decrypt } from '@/lib/crypto';
 import { getAccessToken } from '@/lib/google/oauth';
@@ -25,12 +26,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ fileId:
   const ctx = await getSessionContext();
   if (!ctx) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
-  const { data: file } = await ctx.supabase
-    .from('shared_files_metadata')
-    .select('id, source, local_structure, google_token_id, drive_file_id, sheet_mode, sheet_names')
-    .eq('id', fileId)
-    .eq('company_id', ctx.companyId)
-    .maybeSingle();
+  let fileQuery = dbForResource(ctx).from('shared_files_metadata').select('id, source, local_structure, google_token_id, drive_file_id, sheet_mode, sheet_names').eq('id', fileId);
+  if (!ctx.isAdmin) fileQuery = fileQuery.eq('company_id', ctx.companyId);
+  const { data: file } = await fileQuery.maybeSingle();
   if (!file) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
   /* Archivo LOCAL: la estructura (solo nombres) la envía el agente del PC; aquí no se lee ningún archivo. */
@@ -87,7 +85,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ fileId:
     const dateCols = new Set<string>();
     for (const s of workbook.sheets) {
       for (const header of s.table.headers) {
-        if (!dateCols.has(header) && looksLikeDates(s.table.rows.map((r) => r.values[header]))) dateCols.add(header);
+        if (!dateCols.has(header) && looksLikeDates(s.table.rows.map((r) => r.values[header]), header)) dateCols.add(header);
         const list = columnMap.get(header) ?? [];
         if (s.sheetName) list.push(s.sheetName);
         columnMap.set(header, list);

@@ -1,0 +1,10 @@
+/* Administración: gestionar proyectos y reglas en nombre de otros usuarios. */
+.admin-wrap { display: grid; gap: 18px; }
+.admin-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.admin-head h2 { margin: 0; }
+.admin-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; }
+.admin-list li { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.admin-list li > strong { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.admin-actions { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-left: auto; }
+.admin-field select { width: 100%; max-width: 420px; }
+.admin-tag { background: var(--violet-soft); color: var(--violet); margin-left: 6px; }
