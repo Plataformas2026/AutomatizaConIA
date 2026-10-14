@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { mailtoLink, outlookPersonalLink, outlookWebLink } from '@/lib/email/links';
-import { IconCheck, IconMail } from '../Icons';
+import { openInOutlookLink } from '@/lib/email/links';
+import { IconCheck, IconFolder, IconMail, IconTable } from '../Icons';
 
 export interface OutboxItem {
   id: string;
@@ -17,15 +17,19 @@ export interface OutboxItem {
   body: string;
   problem: string | null;
   status: 'pending' | 'drafted';
+  projectId: string | null;
+  projectName: string | null;
+  createdAt: string;
 }
 
 /**
- * «Tienes pendiente mandar el correo…»: correos que la regla ha preparado y que no se
- * han podido enviar solos. La persona los revisa y los manda desde su Outlook.
+ * «Tienes pendiente mandar el correo…», agrupado por proyecto igual que las alertas.
+ * La persona revisa cada correo y lo manda desde su Outlook clásico.
  */
-export function OutboxPanel({ items: initial }: { items: OutboxItem[] }) {
+export function OutboxPanel({ items: initial, projects }: { items: OutboxItem[]; projects: { id: string; name: string }[] }) {
   const router = useRouter();
   const [items, setItems] = useState(initial);
+  const [filter, setFilter] = useState('all');
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,58 +59,86 @@ export function OutboxPanel({ items: initial }: { items: OutboxItem[] }) {
     }
   }
 
-  if (!items.length) return null;
+  if (!items.length) {
+    return (
+      <div className="empty">
+        <span className="empty-icon">
+          <IconCheck size={28} />
+        </span>
+        <strong>No tienes correos pendientes</strong>
+        <p className="muted">Cuando una regla prepare un correo que no se haya enviado solo, aparecerá aquí.</p>
+      </div>
+    );
+  }
+
+  const visible = items.filter((i) => (filter === 'all' ? true : filter === 'none' ? !i.projectId : i.projectId === filter));
 
   return (
-    <section aria-labelledby="outbox-title">
-      <h2 id="outbox-title">
-        <IconMail size={20} /> Correos pendientes de enviar ({items.length})
-      </h2>
-      <p className="muted section-hint">
-        Estos correos están preparados con los datos de tus archivos, pero no se han enviado solos. Revísalos y envíalos
-        desde tu Outlook; luego pulsa «Ya lo he enviado».
-      </p>
+    <>
       {error && <p className="err" role="alert">{error}</p>}
-      <div className="outbox">
-        {items.map((i) => {
+      {projects.length > 0 && (
+        <label className="scope-select">
+          <span className="field-title">Proyecto</span>
+          <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+            <option value="all">Todos los proyectos</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+            <option value="none">Sin proyecto</option>
+          </select>
+        </label>
+      )}
+      {visible.length === 0 && <p className="muted">No hay correos pendientes en este proyecto.</p>}
+
+      <ul className="alert-list">
+        {visible.map((i) => {
           const sendable = !i.problem && !!i.to;
           return (
-            <article className="outbox-item" key={i.id}>
-              <h3>Tienes pendiente mandar el correo «{i.subject || '(sin asunto)'}»</h3>
-              <div className="chips">
-                <span className="tag tag-file">{i.fileName}</span>
-                {i.sheetName && <span className="tag tag-sheet">Hoja «{i.sheetName}»</span>}
-                {i.rowNumber != null && <span className="tag tag-count">Fila {i.rowNumber}</span>}
-                <span className="tag tag-rule">Regla «{i.ruleName}»</span>
-                {i.status === 'drafted' && <span className="tag tag-count">Borrador en tu Outlook</span>}
-              </div>
-              <dl className="outbox-meta">
-                <div>
-                  <dt>Para:</dt>
-                  <dd>{i.to || '(sin destinatario)'}</dd>
+            <li key={i.id} className={`alert-item sev-${i.problem ? 'warning' : 'info'} is-open`}>
+              <span className="alert-sev" title="Correo pendiente">
+                <IconMail size={18} />
+              </span>
+              <div className="grow">
+                <strong className="alert-msg">Tienes pendiente mandar el correo «{i.subject || '(sin asunto)'}»</strong>
+                <div className="chips">
+                  <span className="tag tag-file">
+                    <IconTable size={14} />
+                    {i.fileName}
+                  </span>
+                  {i.sheetName && <span className="tag tag-sheet">Hoja «{i.sheetName}»</span>}
+                  {i.projectName && (
+                    <span className="tag tag-project">
+                      <IconFolder size={14} />
+                      {i.projectName}
+                    </span>
+                  )}
+                  {i.rowNumber != null && <span className="tag tag-count">Fila {i.rowNumber}</span>}
+                  <span className="tag tag-rule">Regla «{i.ruleName}»</span>
+                  {i.status === 'drafted' && <span className="tag tag-count">Borrador en tu Outlook</span>}
                 </div>
-                {i.from && (
-                  <div>
-                    <dt>Debe enviarse desde:</dt>
-                    <dd>{i.from}</dd>
-                  </div>
-                )}
-              </dl>
-              {i.problem && <p className="outbox-problem">⚠ {i.problem}</p>}
-              <div className="outbox-body">{i.body}</div>
-              <div className="outbox-actions">
+                <p className="muted" style={{ margin: '6px 0 0' }}>
+                  <strong>Para:</strong> {i.to || '(sin destinatario)'}
+                  {i.from && (
+                    <>
+                      {' · '}
+                      <strong>Desde:</strong> {i.from}
+                    </>
+                  )}
+                </p>
+                {i.problem && <p className="err">⚠ {i.problem}</p>}
+                <div style={{ whiteSpace: 'pre-wrap', margin: '8px 0', maxHeight: 160, overflow: 'auto' }}>{i.body}</div>
+                <time className="muted" dateTime={i.createdAt}>
+                  {new Date(i.createdAt).toLocaleString('es-ES')}
+                </time>
+              </div>
+              <div className="alert-actions">
                 {sendable && (
-                  <>
-                    <a className="btn primary" href={mailtoLink(i.to, i.subject, i.body)}>
-                      Abrir en mi correo (Outlook)
-                    </a>
-                    <a className="btn" href={outlookWebLink(i.to, i.subject, i.body)} target="_blank" rel="noopener noreferrer">
-                      Outlook en la web (trabajo)
-                    </a>
-                    <a className="btn" href={outlookPersonalLink(i.to, i.subject, i.body)} target="_blank" rel="noopener noreferrer">
-                      Outlook.com (personal)
-                    </a>
-                  </>
+                  <a className="btn primary" href={openInOutlookLink(i.id)}>
+                    <IconMail size={16} />
+                    Abrir en Outlook
+                  </a>
                 )}
                 <button type="button" className="btn" onClick={() => void copy(i)}>
                   {copied === i.id ? 'Copiado' : 'Copiar texto'}
@@ -118,10 +150,10 @@ export function OutboxPanel({ items: initial }: { items: OutboxItem[] }) {
                   Descartar
                 </button>
               </div>
-            </article>
+            </li>
           );
         })}
-      </div>
-    </section>
+      </ul>
+    </>
   );
 }

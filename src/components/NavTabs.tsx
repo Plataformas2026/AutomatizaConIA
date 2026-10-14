@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAlerts } from './AlertsProvider';
-import { IconBell, IconChart, IconGrid, IconSpark } from './Icons';
+import { IconBell, IconChart, IconGrid, IconMail, IconSpark } from './Icons';
 
 /** Barra de pestañas: la sección actual queda marcada con color, subrayado y aria-current. */
 export function NavTabs() {
@@ -11,6 +11,7 @@ export function NavTabs() {
   const { unread } = useAlerts();
 
   const onDashboard = pathname === '/dashboard' || pathname.startsWith('/files') || pathname.startsWith('/projects') || pathname.startsWith('/agent');
+  const onEmails = pathname.startsWith('/emails');
   const onAlerts = pathname.startsWith('/alerts');
   const onStats = pathname.startsWith('/stats');
   const onModels = pathname.startsWith('/models');
@@ -26,6 +27,15 @@ export function NavTabs() {
       >
         <IconGrid size={18} />
         Dashboard
+      </Link>
+      <Link
+        href="/emails"
+        className={`tab ${onEmails ? 'is-active' : ''}`}
+        style={{ ['--tab-color' as string]: 'var(--info)' }}
+        aria-current={onEmails ? 'page' : undefined}
+      >
+        <IconMail size={18} />
+        Correos
       </Link>
       <Link
         href="/alerts"

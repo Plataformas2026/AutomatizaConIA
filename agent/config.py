@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,6 +43,8 @@ class Config:
     email_mode: str = "off"            # off | draft (los deja en Borradores) | send (los envía)
     email_allowed_domains: tuple[str, ...] = ()
     email_max_per_hour: int = 20
+    # Cuenta de Outlook (su dirección) donde se crean los borradores / desde la que se envía, si tienes varias.
+    outlook_account: str = ""
 
     @property
     def state_file(self) -> Path:
@@ -53,7 +56,7 @@ class Config:
 
 
 def load_config(base_dir: Path = HERE) -> Config:
-    env = {**_parse_env_file(base_dir / ".env"), **{k: v for k, v in os.environ.items() if k.startswith(("SUPABASE_", "AGENT_", "WATCH_", "POLL_", "DEBOUNCE_", "MAX_FILE", "EMAIL_"))}}
+    env = {**_parse_env_file(base_dir / ".env"), **{k: v for k, v in os.environ.items() if k.startswith(("SUPABASE_", "AGENT_", "WATCH_", "POLL_", "DEBOUNCE_", "MAX_FILE", "EMAIL_", "OUTLOOK_"))}}
 
     missing = [k for k in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "AGENT_TOKEN", "WATCH_FOLDERS") if not env.get(k)]
     if missing:
@@ -93,6 +96,10 @@ def load_config(base_dir: Path = HERE) -> Config:
             "solo se enviará automáticamente a esos dominios."
         )
 
+    outlook_account = env.get("OUTLOOK_ACCOUNT_EMAIL", "").strip()
+    if outlook_account and not re.match(r"^[^\s@<>;,]+@[^\s@<>;,]+\.[^\s@<>;,]+$", outlook_account):
+        raise ConfigError("OUTLOOK_ACCOUNT_EMAIL debe ser una dirección de correo (p. ej. nombre@empresa.com).")
+
     return Config(
         supabase_url=url,
         anon_key=env["SUPABASE_ANON_KEY"],
@@ -105,4 +112,5 @@ def load_config(base_dir: Path = HERE) -> Config:
         email_mode=email_mode,
         email_allowed_domains=domains,
         email_max_per_hour=int(number("EMAIL_MAX_PER_HOUR", 20, 1)),
+        outlook_account=outlook_account,
     )

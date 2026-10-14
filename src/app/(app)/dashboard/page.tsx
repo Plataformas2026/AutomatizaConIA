@@ -6,7 +6,6 @@ import { LocalFilePanel } from '@/components/local/LocalFilePanel';
 import { loadAgentCards } from '@/lib/agents/load';
 import { FileList } from '@/components/files/FileList';
 import { ProjectGrid, ProjectCover } from '@/components/projects/ProjectGrid';
-import { OutboxPanel, type OutboxItem } from '@/components/email/OutboxPanel';
 import { FILE_COLUMNS, toFileItem, type FileRowDb } from '@/lib/projects/format';
 import type { ProjectCard } from '@/lib/projects/types';
 
@@ -33,7 +32,7 @@ export default async function DashboardPage({
   // Si alguien te invitó a un proyecto con este correo, aquí pasa a ser tuyo (solo lectura).
   await ctx.supabase.rpc('claim_project_invitations');
 
-  const [{ data: connections }, { data: files }, { data: projectRows }, { data: sharedRows }, { data: outboxRows }] =
+  const [{ data: connections }, { data: files }, { data: projectRows }, { data: sharedRows }, { count: outboxCount }] =
     await Promise.all([
       ctx.supabase.from('google_connections').select('id, google_email, status'),
       ctx.supabase
@@ -53,26 +52,10 @@ export default async function DashboardPage({
         .order('created_at', { ascending: true }),
       ctx.supabase
         .from('email_outbox')
-        .select('id, file_name, rule_name, sheet_name, row_number, from_addr, to_addr, subject, body, problem, status, created_at')
+        .select('id', { count: 'exact', head: true })
         .eq('company_id', ctx.companyId)
-        .in('status', ['pending', 'drafted'])
-        .order('created_at', { ascending: true })
-        .limit(50),
+        .in('status', ['pending', 'drafted']),
     ]);
-
-  const outbox: OutboxItem[] = (outboxRows ?? []).map((o) => ({
-    id: o.id,
-    fileName: o.file_name,
-    ruleName: o.rule_name,
-    sheetName: o.sheet_name,
-    rowNumber: o.row_number,
-    from: o.from_addr,
-    to: o.to_addr ?? '',
-    subject: o.subject ?? '',
-    body: o.body ?? '',
-    problem: o.problem,
-    status: o.status as 'pending' | 'drafted',
-  }));
 
   const allFiles = ((files ?? []) as FileRowDb[]).map(toFileItem);
   const loose = allFiles.filter((f) => !f.projectId);
@@ -99,7 +82,12 @@ export default async function DashboardPage({
 
       {google && NOTICES[google] && <div className="notice">{NOTICES[google]}</div>}
 
-      <OutboxPanel items={outbox} />
+      {(outboxCount ?? 0) > 0 && (
+        <div className="notice">
+          Tienes {outboxCount} correo{outboxCount === 1 ? '' : 's'} pendiente{outboxCount === 1 ? '' : 's'}.{' '}
+          <Link href="/emails">Ver correos pendientes</Link>
+        </div>
+      )}
 
       <div className="panel connect row wrap">
         <div className="grow">

@@ -214,4 +214,8 @@ Para que el agente los gestione con el Outlook de escritorio de tu PC (Windows, 
    - `EMAIL_MODE=send` → los **envía** solo, pero únicamente a los dominios de `EMAIL_ALLOWED_DOMAINS=miempresa.com` (obligatorio) y con tope `EMAIL_MAX_PER_HOUR` (20 por defecto).
 3. Reinicia el agente y ejecuta `comprobar_agente.bat`: debe decir «Correos: modo …».
 
+**Varias cuentas en Outlook.** Añade a `.env` `OUTLOOK_ACCOUNT_EMAIL=tu_cuenta@dominio.com`: los borradores se crean en la carpeta Borradores de ESA cuenta (y los envíos salen desde ella). Si una regla indica su propio remitente, manda el de la regla. `comprobar_agente.bat` lista las cuentas de tu Outlook.
+
+**Botón «Abrir en Outlook» (Outlook clásico).** Ejecuta una vez `registrar_abrir_outlook.ps1` (clic derecho → Ejecutar con PowerShell). Después, el botón de la pestaña **Correos** abre el correo en tu Outlook clásico de escritorio. Funciona aunque `EMAIL_MODE=off`.
+
 Seguridad: el contenido de una celda de Excel acaba en el correo. Por eso en modo `send` solo se envía a dominios que tú autorizas. Un correo con destinatario no válido o fuera de esos dominios queda pendiente en la web con el motivo. Si el remitente de la regla no coincide con una cuenta de tu Outlook, también queda pendiente.

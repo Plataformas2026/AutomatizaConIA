@@ -34,7 +34,7 @@ import engine
 import outlook
 import readers
 
-VERSION = "1.0.0"
+VERSION = "1.2.0"
 LOCK_PORT = 47653  # evita dos agentes a la vez (se libera sola al cerrar)
 log = logging.getLogger("agente")
 
@@ -104,7 +104,7 @@ class Agent:
         self._name_index_at = 0.0
         self._offline = False
         self.stop = threading.Event()
-        self.outlook = outlook.OutlookSender()
+        self.outlook = outlook.OutlookSender(cfg.outlook_account)
 
     # ── Resolución de rutas ─────────────────────────────────────────────
     def _scan_names(self) -> dict[str, list[Path]]:
@@ -298,9 +298,10 @@ class Agent:
 
         new_alerts = 0
         for raw in rules:
-            rule = engine.validate_rule(raw)
+            rule, why = engine.check_rule(raw)
             if rule is None:
-                self.api.report_rule(fid, str(raw.get("id")), None, "Regla no válida", None)
+                log.warning("«%s»: regla %s no válida: %s", name, str(raw.get("id"))[:8], why)
+                self.api.report_rule(fid, str(raw.get("id")), None, f"Regla no válida: {why}"[:300], None)
                 continue
             ev = engine.evaluate_across_sheets(rule, wb.sheets)
             if ev.error:
@@ -399,6 +400,7 @@ class Agent:
         next_poll = 0.0
         next_mail = 0.0
         log.info("Agente %s en marcha. Carpetas autorizadas: %s", VERSION, "; ".join(str(f) for f in self.cfg.folders))
+        log.info("Correos: modo «%s»", self.cfg.email_mode)
         try:
             while not self.stop.is_set():
                 now = time.monotonic()
@@ -488,6 +490,16 @@ def check(cfg: Config, api: Api) -> int:
     else:
         extra = f", solo a: {', '.join(cfg.email_allowed_domains)}" if cfg.email_mode == "send" else ""
         print(f"Correos: modo «{cfg.email_mode}» con tu Outlook{extra}. Máximo {cfg.email_max_per_hour} por hora.")
+        try:
+            accounts = outlook.OutlookSender().list_accounts()
+            print("Cuentas en tu Outlook: " + (", ".join(accounts) or "(ninguna)"))
+            if cfg.outlook_account:
+                ok = cfg.outlook_account.lower() in (x.lower() for x in accounts)
+                print(f"  {'✓' if ok else '✗'} OUTLOOK_ACCOUNT_EMAIL={cfg.outlook_account}" + ("" if ok else "  ← no coincide con ninguna cuenta"))
+            elif len(accounts) > 1:
+                print("  ⚠ Tienes varias cuentas: indica OUTLOOK_ACCOUNT_EMAIL en .env para elegir dónde se crean los borradores.")
+        except (outlook.OutlookUnavailable, outlook.OutlookRejected) as e:
+            print(f"  ✗ {e}")
     agent = Agent(cfg, api)
     files = conf.get("files", [])
     print(f"Archivos asignados: {len(files)}")
