@@ -180,6 +180,34 @@ class Integration(unittest.TestCase):
             self.fake.files["f1"]["rules"].append(json.loads(json.dumps({**RULE, "updated_at": "2026-02-02"})))
         self.assertTrue(wait_for(lambda: len(self.fake.alerts) == 1), "no evaluó la regla nueva")
 
+    def test_date_rule_reevaluated_when_the_day_changes(self):
+        from datetime import date, datetime
+        from unittest import mock
+
+        import engine
+        from openpyxl import Workbook
+
+        wb = Workbook()
+        ws = wb.active
+        ws.append(["Cliente", "Alta"])
+        ws.append(["A", datetime(2026, 10, 1)])
+        ws.append(["B", datetime(2026, 10, 10)])
+        wb.save(self.root / "sub" / "altas.xlsx")  # el archivo NO volverá a cambiar
+        rule = {"id": "d1", "name": "Antiguos", "updated_at": "2026-01-01",
+                "condition": {"kind": "compare", "left": {"type": "column", "column": "Alta"}, "operator": "elapsed",
+                              "unit": "days", "right": {"type": "value", "value": 10}},
+                "actions": [{"type": "alert", "message": "Filas {rows}", "severity": "info"}], "fingerprints": {}}
+        self.fake.files["f9"] = {"name": "altas.xlsx", "rules": [rule]}
+        today = {"d": date(2026, 10, 14)}
+        with mock.patch.object(engine, "today_day", lambda d=None: engine.__dict__["_real_today"](today["d"])):
+            engine.__dict__["_real_today"] = lambda d: (d - date(1970, 1, 1)).days
+            self.start()
+            self.assertTrue(wait_for(lambda: len(self.fake.alerts) == 1), "no llegó la primera alerta")
+            self.assertEqual(self.fake.alerts[0]["rows"], [2])
+            today["d"] = date(2026, 10, 21)  # pasa una semana sin tocar el archivo
+            self.assertTrue(wait_for(lambda: len(self.fake.alerts) == 2, 25), "no reevaluó al cambiar el día")
+            self.assertEqual(self.fake.alerts[1]["rows"], [2, 3])
+
     def test_invalid_token_stops(self):
         self.agent.api._token = "x" * 40
         self.thread = threading.Thread(target=lambda: setattr(self, "code", self.agent.run()), daemon=True)

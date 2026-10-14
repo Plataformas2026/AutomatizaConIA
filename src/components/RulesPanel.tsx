@@ -2,7 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { OPERATORS, OPERATOR_LABELS, isUnary, type Operator } from '@/lib/rules/operators';
+import {
+  DATE_OPERATORS,
+  MAX_ELAPSED,
+  OPERATORS,
+  OPERATOR_LABELS,
+  TIME_UNITS,
+  TIME_UNIT_LABELS,
+  isDateOperator,
+  isUnary,
+  type Operator,
+  type TimeUnit,
+} from '@/lib/rules/operators';
 import { humanizeTemplate } from '@/lib/messages/variables';
 import { MessageBuilder, MESSAGE_MAX_LENGTH } from './MessageBuilder';
 import { EmailBox, EMPTY_EMAIL, type EmailDraftValue } from './email/EmailBox';
@@ -12,6 +23,8 @@ export interface ColumnInfo {
   name: string;
   /** Hojas vigiladas en las que existe la columna ([] en CSV). */
   sheets: string[];
+  /** La columna contiene fechas (habilita «ha pasado al menos…» y «ya llegó la fecha»). */
+  isDate?: boolean;
 }
 
 export interface RuleRow {
@@ -21,9 +34,10 @@ export interface RuleRow {
   condition: {
     left?: { column?: string };
     operator?: Operator;
+    unit?: TimeUnit;
     right?: { type?: 'column' | 'value'; column?: string; value?: string | number };
   };
-  actions: { type: string; message?: string; severity?: string; to?: string; subject?: string; mode?: string }[];
+  actions: { type: string; message?: string; severity?: string; to?: string; cc?: string; subject?: string; mode?: string }[];
   last_error: string | null;
   last_evaluated_at: string | null;
 }
@@ -33,9 +47,21 @@ function humanizeEmailTemplate(t: string): string {
   return humanizeTemplate(t.replace(/\{col:([^{}]{1,200})\}/g, '‹$1›'));
 }
 
+/** 2026-11-15 → 15/11/2026 */
+function formatIso(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
+const COMPARATORS: readonly Operator[] = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'];
+
 function describe(c: RuleRow['condition']): string {
   const op = c.operator ? OPERATOR_LABELS[c.operator] : '?';
   if (c.operator && isUnary(c.operator)) return `«${c.left?.column}» ${op}`;
+  if (c.operator === 'elapsed') {
+    return `«${c.left?.column}» ha pasado al menos ${c.right?.value} ${TIME_UNIT_LABELS[c.unit ?? 'days']} desde esa fecha`;
+  }
+  if (c.operator === 'on_date') return `«${c.left?.column}» tiene fecha y ya llegó el ${formatIso(String(c.right?.value ?? ''))}`;
   const right = c.right?.type === 'column' ? `«${c.right.column}»` : `"${c.right?.value}"`;
   return `«${c.left?.column}» ${op} ${right}`;
 }
@@ -68,6 +94,9 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
   const [rightType, setRightType] = useState<'column' | 'value'>('value');
   const [rightColumn, setRightColumn] = useState('');
   const [rightValue, setRightValue] = useState('');
+  const [elapsedN, setElapsedN] = useState('30');
+  const [unit, setUnit] = useState<TimeUnit>('days');
+  const [dateValue, setDateValue] = useState('');
   const [message, setMessage] = useState('');
   const [msgReset, setMsgReset] = useState(0);
   const [severity, setSeverity] = useState<'info' | 'warning' | 'critical'>('info');
@@ -84,6 +113,18 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
     setLeft((cur) => (names.includes(cur) ? cur : names[0]));
     setRightColumn((cur) => (names.includes(cur) ? cur : (names[1] ?? names[0])));
   }, [columns]);
+
+  const leftIsDate = !!columns?.find((c) => c.name === left)?.isDate;
+  const valueIsDate = leftIsDate && COMPARATORS.includes(operator);
+
+  // Las opciones de fecha solo existen para columnas de fecha.
+  useEffect(() => {
+    if (!leftIsDate && isDateOperator(operator)) setOperator('gt');
+  }, [leftIsDate, operator]);
+  // El valor fijo cambia de tipo (texto ↔ calendario): se vacía para no dejar algo inválido.
+  useEffect(() => {
+    setRightValue('');
+  }, [valueIsDate]);
 
   function columnLabel(c: ColumnInfo): string {
     // Con varias hojas, avisa de las columnas que no están en todas.
@@ -109,6 +150,17 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
       setFormError(`El texto del aviso no puede pasar de ${MESSAGE_MAX_LENGTH} caracteres.`);
       return;
     }
+    if (operator === 'elapsed') {
+      const n = Number(elapsedN);
+      if (!elapsedN.trim() || !Number.isInteger(n) || n < 0 || n > MAX_ELAPSED) {
+        setFormError(`Indica cuánto tiempo debe pasar: un número entero entre 0 y ${MAX_ELAPSED}.`);
+        return;
+      }
+    }
+    if (operator === 'on_date' && !dateValue) {
+      setFormError('Elige en el calendario la fecha en la que quieres el aviso.');
+      return;
+    }
     if (emailOn) {
       if (!email.to.trim() || !email.subject.trim() || !email.body.trim()) {
         setFormError('En el correo faltan el destinatario, el asunto o el mensaje.');
@@ -119,6 +171,10 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
         setFormError('El destinatario no es una dirección de correo válida.');
         return;
       }
+      if (email.cc.trim() && !/\{[^}]+\}/.test(email.cc) && !parseRecipients(email.cc)) {
+        setFormError('Las direcciones en copia (CC) no son válidas. Sepáralas con punto y coma.');
+        return;
+      }
     }
 
     setSaving(true);
@@ -126,14 +182,18 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
       kind: 'compare',
       left: { type: 'column', column: left },
       operator,
-      ...(isUnary(operator)
-        ? {}
-        : {
-            right:
-              rightType === 'column'
-                ? { type: 'column', column: rightColumn }
-                : { type: 'value', value: rightValue },
-          }),
+      ...(operator === 'elapsed'
+        ? { unit, right: { type: 'value', value: Number(elapsedN) } }
+        : operator === 'on_date'
+          ? { right: { type: 'value', value: dateValue } }
+          : isUnary(operator)
+            ? {}
+            : {
+                right:
+                  rightType === 'column'
+                    ? { type: 'column', column: rightColumn }
+                    : { type: 'value', value: rightValue },
+              }),
     };
 
     const res = await fetch('/api/rules', {
@@ -146,7 +206,7 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
         actions: [
           ...(alertOn ? [{ type: 'alert', message, severity }] : []),
           ...(emailOn
-            ? [{ type: 'email', from: email.from, to: email.to, subject: email.subject, body: email.body, mode: email.mode }]
+            ? [{ type: 'email', from: email.from, to: email.to, cc: email.cc, subject: email.subject, body: email.body, mode: email.mode }]
             : []),
         ],
       }),
@@ -223,15 +283,63 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
                 <div className="field">
                   <label htmlFor="op">…cumple</label>
                   <select id="op" value={operator} onChange={(e) => setOperator(e.target.value as Operator)}>
-                    {OPERATORS.map((o) => (
+                    {OPERATORS.filter((o) => !isDateOperator(o)).map((o) => (
                       <option key={o} value={o}>
                         {OPERATOR_LABELS[o]}
                       </option>
                     ))}
+                    {leftIsDate && (
+                      <optgroup label="Para fechas">
+                        {DATE_OPERATORS.map((o) => (
+                          <option key={o} value={o}>
+                            {OPERATOR_LABELS[o]}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 </div>
 
-                {!isUnary(operator) && (
+                {operator === 'elapsed' && (
+                  <div className="field">
+                    <label htmlFor="elapsed-n">Tiempo transcurrido</label>
+                    <div className="inline-pair">
+                      <input
+                        id="elapsed-n"
+                        type="number"
+                        min={0}
+                        max={MAX_ELAPSED}
+                        step={1}
+                        required
+                        value={elapsedN}
+                        onChange={(e) => setElapsedN(e.target.value)}
+                        aria-label="Cantidad"
+                      />
+                      <select value={unit} onChange={(e) => setUnit(e.target.value as TimeUnit)} aria-label="Unidad de tiempo">
+                        {TIME_UNITS.map((u) => (
+                          <option key={u} value={u}>
+                            {TIME_UNIT_LABELS[u]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <span className="muted">
+                      Avisa cuando hayan pasado al menos esos días (o semanas, meses…) desde la fecha de cada celda.
+                    </span>
+                  </div>
+                )}
+
+                {operator === 'on_date' && (
+                  <div className="field">
+                    <label htmlFor="on-date">Fecha del aviso</label>
+                    <input id="on-date" type="date" required value={dateValue} onChange={(e) => setDateValue(e.target.value)} />
+                    <span className="muted">
+                      Desde ese día avisa de las filas que tengan una fecha en esta columna. La comprobación se repite cada día.
+                    </span>
+                  </div>
+                )}
+
+                {!isUnary(operator) && !isDateOperator(operator) && (
                   <div className="field">
                     <label htmlFor="right-type">Comparar con</label>
                     <div className="inline-pair">
@@ -259,6 +367,7 @@ export function RulesPanel({ fileId, fileName, initialRules, columns, columnsErr
                       ) : (
                         <input
                           required
+                          type={valueIsDate ? 'date' : 'text'}
                           maxLength={500}
                           value={rightValue}
                           onChange={(e) => setRightValue(e.target.value)}

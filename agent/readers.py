@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import Any, Iterable, Iterator, Optional
 
-from engine import Row, SheetTable, Table, resolve_sheets
+from engine import Row, SheetTable, Table, looks_like_dates, resolve_sheets
 
 MAX_ROWS = 50_000
 MAX_SHEETS = 50
@@ -93,6 +93,12 @@ def _build_table(rows: Iterable[tuple[int, list[Any]]], header_only: bool = Fals
     return Table(headers, out)
 
 
+def _table_info(sheet: Optional[str], table: Table) -> dict:
+    """Estructura de una hoja: SOLO nombres de columnas y cuáles son de fecha (sin valores)."""
+    dates = [h for h in table.headers if looks_like_dates([row.values.get(h) for row in table.rows])]
+    return {"sheet": sheet, "columns": table.headers, "dateColumns": dates}
+
+
 # ── CSV ─────────────────────────────────────────────────────────────────
 def _decode(data: bytes) -> str:
     try:
@@ -122,7 +128,7 @@ def _csv_rows(text: str) -> Iterator[tuple[int, list[Any]]]:
 
 def _read_csv(data: bytes) -> Workbook:
     table = _build_table(_csv_rows(_decode(data)))
-    return Workbook([], {"sheets": [], "tables": [{"sheet": None, "columns": table.headers}]}, [SheetTable(None, table)])
+    return Workbook([], {"sheets": [], "tables": [_table_info(None, table)]}, [SheetTable(None, table)])
 
 
 # ── XLSX / XLSM ─────────────────────────────────────────────────────────
@@ -145,7 +151,7 @@ def _read_xlsx(data: bytes, mode: str, names: list[str]) -> Workbook:
                 continue
             rows = ((i, list(r)) for i, r in enumerate(ws.iter_rows(values_only=True), start=1))
             table = _build_table(rows, header_only=name not in wanted)
-            tables.append({"sheet": name, "columns": table.headers})
+            tables.append(_table_info(name, table))
             if name in wanted:
                 selected.append(SheetTable(name, table))
         return Workbook(available, {"sheets": available, "tables": tables}, selected)
@@ -188,7 +194,7 @@ def _read_xls(data: bytes, mode: str, names: list[str]) -> Workbook:
                     yield r + 1, vals
 
             table = _build_table(rows(), header_only=name not in wanted)
-            tables.append({"sheet": name, "columns": table.headers})
+            tables.append(_table_info(name, table))
             if name in wanted:
                 selected.append(SheetTable(name, table))
         return Workbook(available, {"sheets": available, "tables": tables}, selected)

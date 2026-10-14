@@ -1,4 +1,4 @@
-import type { Operator } from './operators';
+import { MAX_ELAPSED, type Operator, type TimeUnit } from './operators';
 import type { Condition } from './types';
 import type { ParsedTable, SheetTable } from '../parsing/parse';
 
@@ -71,6 +71,37 @@ export function toDate(v: unknown): number | null {
   return null;
 }
 
+/** Día de hoy (nº de días desde 1970) en la zona horaria de la aplicación. */
+export function todayDay(timeZone = process.env.APP_TIME_ZONE || 'Europe/Madrid', now = new Date()): number {
+  const iso = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  return Math.floor(Date.parse(`${iso}T00:00:00Z`) / DAY_MS);
+}
+
+/** Suma `n` unidades a un día. Los meses/años respetan el calendario (31 ene + 1 mes = 28/29 feb). */
+export function addUnits(day: number, n: number, unit: TimeUnit): number {
+  if (unit === 'days') return day + n;
+  if (unit === 'weeks') return day + 7 * n;
+  const d = new Date(day * DAY_MS);
+  const months = d.getUTCFullYear() * 12 + d.getUTCMonth() + (unit === 'years' ? 12 * n : n);
+  const y = Math.floor(months / 12);
+  const m = months % 12;
+  const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return Math.floor(Date.UTC(y, m, Math.min(d.getUTCDate(), last)) / DAY_MS);
+}
+
+/** ¿Más de la mitad de los valores con contenido son fechas? (para ofrecer las opciones de fecha). */
+export function looksLikeDates(values: unknown[]): boolean {
+  let filled = 0;
+  let dates = 0;
+  for (const v of values) {
+    if (isEmpty(v)) continue;
+    filled++;
+    if (toDate(v) !== null) dates++;
+    if (filled >= 200) break;
+  }
+  return filled > 0 && dates / filled >= 0.6;
+}
+
 function text(v: unknown): string {
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   return String(v ?? '').trim().toLowerCase();
@@ -91,8 +122,28 @@ function order(a: unknown, b: unknown): number | null {
 
 /* ── Comparación ───────────────────────────────────────────── */
 
-export function compare(left: unknown, op: Operator, right: unknown): boolean {
+export interface CompareContext {
+  /** Día de hoy (por defecto, el real). Inyectable para las pruebas. */
+  today?: number;
+  /** Unidad de `elapsed` (por defecto, días). */
+  unit?: TimeUnit;
+}
+
+export function compare(left: unknown, op: Operator, right: unknown, ctx: CompareContext = {}): boolean {
   switch (op) {
+    case 'elapsed': {
+      // «Han pasado al menos N días/semanas/meses/años desde la fecha de la celda».
+      const day = toDate(left);
+      const n = toNumber(right);
+      if (day === null || n === null || !Number.isInteger(n) || n < 0 || n > MAX_ELAPSED) return false;
+      return (ctx.today ?? todayDay()) >= addUnits(day, n, ctx.unit ?? 'days');
+    }
+    case 'on_date': {
+      // «Ya llegó la fecha elegida»: desde ese día, avisa de las filas que tienen una fecha.
+      const day = toDate(left);
+      const target = toDate(right);
+      return day !== null && target !== null && (ctx.today ?? todayDay()) >= target;
+    }
     case 'is_empty':
       return isEmpty(left);
     case 'is_not_empty':
@@ -131,8 +182,10 @@ export function compare(left: unknown, op: Operator, right: unknown): boolean {
 export function evaluateRule(
   rule: { id: string; condition: Condition },
   table: Pick<ParsedTable, 'headers' | 'rows'>,
+  opts: { today?: number } = {},
 ): RuleEvaluation {
   const { condition } = rule;
+  const today = opts.today ?? todayDay();
   const headers = new Set(table.headers);
 
   const missing = [
@@ -157,7 +210,7 @@ export function evaluateRule(
       : condition.right.type === 'column'
         ? row.values[condition.right.column]
         : condition.right.value;
-    if (compare(l, condition.operator, r)) matched.push(row.rowNumber);
+    if (compare(l, condition.operator, r, { today, unit: condition.unit })) matched.push(row.rowNumber);
   }
   return { ruleId: rule.id, matchedRows: matched, matchedCount: matched.length };
 }
@@ -185,6 +238,7 @@ export interface MultiSheetEvaluation {
 export function evaluateRuleAcrossSheets(
   rule: { id: string; condition: Condition },
   sheets: SheetTable[],
+  opts: { today?: number } = {},
 ): MultiSheetEvaluation {
   if (sheets.length === 0) {
     return { ruleId: rule.id, sheets: [], error: 'No hay hojas que vigilar: revisa la selección de hojas' };
@@ -194,7 +248,7 @@ export function evaluateRuleAcrossSheets(
   let firstError: string | undefined;
 
   for (const s of sheets) {
-    const ev = evaluateRule(rule, s.table);
+    const ev = evaluateRule(rule, s.table, opts);
     if (ev.error) {
       firstError ??= ev.error;
       continue;

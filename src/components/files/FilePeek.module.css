@@ -1,0 +1,29 @@
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.iconBtn:hover { transform: scale(1.06); box-shadow: 0 0 0 3px var(--violet-soft); }
+.iconBtn:focus-visible { outline: 3px solid var(--violet); outline-offset: 2px; }
+
+.menu { display: grid; gap: 8px; margin: 14px 0 4px; }
+.menu button, .menu a { justify-content: flex-start; text-align: left; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
+.scroll {
+  overflow: auto;
+  max-height: min(60dvh, 560px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.table { border-collapse: collapse; width: max-content; min-width: 100%; font-size: 0.86rem; }
+.table th, .table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+.table thead th { position: sticky; top: 0; background: var(--surface-2); z-index: 1; }
+.table .rownum { color: var(--muted); text-align: right; position: sticky; left: 0; background: var(--surface-2); }
+.note { margin: 8px 0 0; }

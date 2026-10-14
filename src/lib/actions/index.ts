@@ -89,6 +89,7 @@ async function runEmail(action: EmailAction, ctx: ActionContext): Promise<void> 
       dedupe_key: d.key,
       from_addr: d.from || null,
       to_addr: d.to,
+      cc_addr: d.cc || null,
       subject: d.subject,
       body: d.body,
       problem: d.problem,

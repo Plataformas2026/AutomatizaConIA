@@ -45,6 +45,8 @@ class Config:
     email_max_per_hour: int = 20
     # Cuenta de Outlook (su dirección) donde se crean los borradores / desde la que se envía, si tienes varias.
     outlook_account: str = ""
+    # Direcciones de la web que pueden pedir la vista previa / abrir archivos de este PC (WEB_ORIGIN).
+    web_origins: tuple[str, ...] = ()
 
     @property
     def state_file(self) -> Path:
@@ -56,7 +58,7 @@ class Config:
 
 
 def load_config(base_dir: Path = HERE) -> Config:
-    env = {**_parse_env_file(base_dir / ".env"), **{k: v for k, v in os.environ.items() if k.startswith(("SUPABASE_", "AGENT_", "WATCH_", "POLL_", "DEBOUNCE_", "MAX_FILE", "EMAIL_", "OUTLOOK_"))}}
+    env = {**_parse_env_file(base_dir / ".env"), **{k: v for k, v in os.environ.items() if k.startswith(("SUPABASE_", "AGENT_", "WATCH_", "POLL_", "DEBOUNCE_", "MAX_FILE", "EMAIL_", "OUTLOOK_", "WEB_"))}}
 
     missing = [k for k in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "AGENT_TOKEN", "WATCH_FOLDERS") if not env.get(k)]
     if missing:
@@ -100,6 +102,15 @@ def load_config(base_dir: Path = HERE) -> Config:
     if outlook_account and not re.match(r"^[^\s@<>;,]+@[^\s@<>;,]+\.[^\s@<>;,]+$", outlook_account):
         raise ConfigError("OUTLOOK_ACCOUNT_EMAIL debe ser una dirección de correo (p. ej. nombre@empresa.com).")
 
+    origins: list[str] = []
+    for o in env.get("WEB_ORIGIN", "").split(","):
+        o = o.strip().rstrip("/")
+        if not o:
+            continue
+        if not re.fullmatch(r"https://[A-Za-z0-9.-]+(:[0-9]+)?|http://(localhost|127\.0\.0\.1)(:[0-9]+)?", o):
+            raise ConfigError("WEB_ORIGIN debe ser la dirección de tu web sin nada más, p. ej. https://miapp.vercel.app")
+        origins.append(o)
+
     return Config(
         supabase_url=url,
         anon_key=env["SUPABASE_ANON_KEY"],
@@ -113,4 +124,5 @@ def load_config(base_dir: Path = HERE) -> Config:
         email_allowed_domains=domains,
         email_max_per_hour=int(number("EMAIL_MAX_PER_HOUR", 20, 1)),
         outlook_account=outlook_account,
+        web_origins=tuple(origins),
     )

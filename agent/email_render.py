@@ -124,11 +124,12 @@ def build_emails(action: dict, rule_id: str, meta: dict, matched: list[dict], he
     """`action`: {from,to,subject,body,mode}. `matched`: [{rowNumber, values}] con solo las columnas usadas."""
     if not matched:
         return []
-    used = referenced_columns([action["to"], action["subject"], action["body"]])
+    used = referenced_columns([action["to"], action.get("cc") or "", action["subject"], action["body"]])
     missing = [c for c in used if c not in headers]
 
     def make(rows: list[dict], per_row: bool) -> dict:
         to = _one_line(_render(action["to"], meta, rows, per_row))
+        cc = _one_line(_render(action.get("cc") or "", meta, rows, per_row))
         subject = _one_line(_render(action["subject"], meta, rows, per_row))[:200]
         body = re.sub(r"\r\n?", "\n", _render(action["body"], meta, rows, per_row))[:6000]
         problem = None
@@ -138,12 +139,15 @@ def build_emails(action: dict, rule_id: str, meta: dict, matched: list[dict], he
             problem = "El destinatario está vacío en esta fila."
         elif parse_recipients(to) is None:
             problem = f"El destinatario «{to[:80]}» no es una dirección de correo válida."
+        elif cc and parse_recipients(cc) is None:
+            problem = f"La copia «{cc[:80]}» no es una dirección de correo válida."
         return {
             "sheet": meta["sheetName"],
             "row": rows[0]["rowNumber"] if per_row else None,
             "key": dedupe_key(rule_id, meta["sheetName"], subject, to, body),
             "from": action.get("from") or "",
             "to": to,
+            "cc": cc,
             "subject": subject,
             "body": body,
             "problem": problem,

@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { decrypt } from '@/lib/crypto';
 import { getAccessToken } from '@/lib/google/oauth';
 import { downloadFile, FileTooLargeError, getFileMeta, GoogleApiError } from '@/lib/google/drive';
+import { looksLikeDates } from '@/lib/rules/engine';
 import { parseMimeFor, parseWorkbook, resolveSheets, type SheetSelection } from '@/lib/parsing/parse';
 
 export const dynamic = 'force-dynamic';
@@ -45,9 +46,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ fileId:
     };
     const active = resolveSheets(available, sel);
     const columnMap = new Map<string, string[]>();
-    for (const t of st.tables as { sheet?: string | null; columns?: unknown }[]) {
+    const dateCols = new Set<string>();
+    for (const t of st.tables as { sheet?: string | null; columns?: unknown; dateColumns?: unknown }[]) {
       const sheet = typeof t.sheet === 'string' ? t.sheet : null;
       if (sheet !== null && !active.includes(sheet)) continue;
+      for (const d of strings(t.dateColumns)) dateCols.add(d);
       for (const header of strings(t.columns)) {
         const list = columnMap.get(header) ?? [];
         if (sheet) list.push(sheet);
@@ -55,7 +58,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ fileId:
       }
     }
     return NextResponse.json(
-      { sheets: available, selection: sel, active, columns: Array.from(columnMap, ([name, sheets]) => ({ name, sheets })) },
+      { sheets: available, selection: sel, active, columns: Array.from(columnMap, ([name, sheets]) => ({ name, sheets, isDate: dateCols.has(name) })) },
       { headers: { 'Cache-Control': 'no-store' } },
     );
   }
@@ -81,8 +84,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ fileId:
     const workbook = parseWorkbook(await downloadFile(accessToken, meta), parseMimeFor(meta.mimeType), selection);
 
     const columnMap = new Map<string, string[]>();
+    const dateCols = new Set<string>();
     for (const s of workbook.sheets) {
       for (const header of s.table.headers) {
+        if (!dateCols.has(header) && looksLikeDates(s.table.rows.map((r) => r.values[header]))) dateCols.add(header);
         const list = columnMap.get(header) ?? [];
         if (s.sheetName) list.push(s.sheetName);
         columnMap.set(header, list);
@@ -94,7 +99,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ fileId:
         sheets: workbook.available,
         selection,
         active: workbook.sheets.map((s) => s.sheetName).filter((n): n is string => n !== null),
-        columns: Array.from(columnMap, ([name, sheets]) => ({ name, sheets })),
+        columns: Array.from(columnMap, ([name, sheets]) => ({ name, sheets, isDate: dateCols.has(name) })),
       },
       { headers: { 'Cache-Control': 'no-store' } },
     );

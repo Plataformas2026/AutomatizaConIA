@@ -111,3 +111,66 @@ test('evaluateRuleAcrossSheets: error solo si ninguna hoja tiene las columnas', 
   const none = evaluateRuleAcrossSheets({ id: 'm3', condition: lowStock }, []);
   assert.match(none.error ?? '', /No hay hojas/);
 });
+
+/* ── Operadores de fecha (casos compartidos con el agente de Python) ── */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { addUnits, looksLikeDates, todayDay } from './engine';
+import { conditionSchema } from './types';
+
+const DATE_CASES = JSON.parse(readFileSync(join(__dirname, '../../../agent/tests/date_cases.json'), 'utf8')) as {
+  today: string;
+  cases: { left: unknown; op: 'elapsed' | 'on_date'; right: unknown; unit: 'days' | 'weeks' | 'months' | 'years'; expected: boolean }[];
+};
+const TODAY = Math.floor(Date.parse(`${DATE_CASES.today}T00:00:00Z`) / 86_400_000);
+
+test('operadores de fecha: mismos resultados que el agente', () => {
+  for (const c of DATE_CASES.cases) {
+    assert.equal(compare(c.left, c.op, c.right, { today: TODAY, unit: c.unit }), c.expected, JSON.stringify(c));
+  }
+});
+
+test('addUnits respeta el calendario', () => {
+  const day = (iso: string) => Math.floor(Date.parse(`${iso}T00:00:00Z`) / 86_400_000);
+  assert.equal(addUnits(day('2026-01-31'), 1, 'months'), day('2026-02-28'));
+  assert.equal(addUnits(day('2024-02-29'), 1, 'years'), day('2025-02-28'));
+  assert.equal(addUnits(day('2026-11-30'), 3, 'months'), day('2027-02-28'));
+  assert.equal(addUnits(day('2026-10-14'), 2, 'weeks'), day('2026-10-28'));
+});
+
+test('todayDay usa la zona horaria indicada', () => {
+  const late = new Date('2026-10-14T22:30:00Z'); // ya es 15 en Madrid (UTC+2) y aún 14 en Canarias (UTC+1)
+  assert.equal(todayDay('Europe/Madrid', late) - todayDay('Atlantic/Canary', late), 1);
+});
+
+test('looksLikeDates detecta columnas de fecha', () => {
+  assert.equal(looksLikeDates(['2026-01-01', '15/02/2026', null, new Date('2026-03-01')]), true);
+  assert.equal(looksLikeDates(['Ana', 'Luis', '2026-01-01']), false);
+  assert.equal(looksLikeDates([1, 2, 3]), false);
+  assert.equal(looksLikeDates([]), false);
+});
+
+test('evaluateRule con elapsed y la validación de la condición', () => {
+  const condition: Condition = {
+    kind: 'compare',
+    left: { type: 'column', column: 'Alta' },
+    operator: 'elapsed',
+    unit: 'days',
+    right: { type: 'value', value: 30 },
+  };
+  assert.equal(conditionSchema.safeParse(condition).success, true);
+  const table = {
+    headers: ['Alta'],
+    rows: [
+      { rowNumber: 2, values: { Alta: '2026-08-01' } },
+      { rowNumber: 3, values: { Alta: '2026-10-10' } },
+      { rowNumber: 4, values: { Alta: null } },
+    ],
+  };
+  assert.deepEqual(evaluateRule({ id: 'e', condition }, table as never, { today: TODAY }).matchedRows, [2]);
+  assert.equal(conditionSchema.safeParse({ ...condition, right: { type: 'value', value: '30' } }).success, false);
+  assert.equal(conditionSchema.safeParse({ ...condition, right: { type: 'value', value: 5000 } }).success, false);
+  const onDate = { ...condition, operator: 'on_date' as const, unit: undefined, right: { type: 'value' as const, value: '2026-12-01' } };
+  assert.equal(conditionSchema.safeParse(onDate).success, true);
+  assert.equal(conditionSchema.safeParse({ ...onDate, right: { type: 'value', value: '01/12/2026' } }).success, false);
+});

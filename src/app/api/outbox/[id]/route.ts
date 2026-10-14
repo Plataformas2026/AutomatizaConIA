@@ -28,6 +28,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       resolved_by: ctx.user.id,
       from_addr: null,
       to_addr: null,
+      cc_addr: null,
       subject: null,
       body: null,
       problem: null,

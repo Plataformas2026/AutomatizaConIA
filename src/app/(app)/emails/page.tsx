@@ -11,7 +11,7 @@ export default async function EmailsPage() {
   const [{ data: rows }, { data: projects }, { data: files }] = await Promise.all([
     ctx.supabase
       .from('email_outbox')
-      .select('id, file_id, project_id, file_name, rule_name, sheet_name, row_number, from_addr, to_addr, subject, body, problem, status, created_at')
+      .select('id, file_id, project_id, file_name, rule_name, sheet_name, row_number, from_addr, to_addr, cc_addr, subject, body, problem, status, created_at')
       .eq('company_id', ctx.companyId)
       .in('status', ['pending', 'drafted'])
       .order('created_at', { ascending: false })
@@ -34,6 +34,7 @@ export default async function EmailsPage() {
       rowNumber: o.row_number,
       from: o.from_addr,
       to: o.to_addr ?? '',
+      cc: o.cc_addr ?? '',
       subject: o.subject ?? '',
       body: o.body ?? '',
       problem: o.problem,
@@ -49,11 +50,7 @@ export default async function EmailsPage() {
       <h1>Correos pendientes</h1>
       <p className="sub">
         Correos que tus reglas han preparado con los datos de tus archivos y que todavía no se han enviado. Cada uno
-        pertenece al proyecto de su archivo. «Abrir en Outlook» lo abre en tu Outlook clásico de escritorio.
-      </p>
-      <p className="muted section-hint">
-        Primera vez: ejecuta <code>registrar_abrir_outlook.ps1</code> (carpeta del agente) y, cuando el navegador lo pida,
-        permite abrir Outlook.
+        pertenece al proyecto de su archivo. Cópialo a tu Outlook, envíalo y pulsa «Ya lo he enviado».
       </p>
       <OutboxPanel items={items} projects={(projects ?? []).map((p) => ({ id: p.id as string, name: p.name as string }))} />
     </>

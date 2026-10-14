@@ -4,7 +4,6 @@ import unittest
 from unittest import mock
 
 import outlook
-import abrir_outlook
 
 
 class Folder:
@@ -69,21 +68,14 @@ class AccountTests(unittest.TestCase):
         self.assertEqual(app.created[0].log, ["send"])
         self.assertEqual(app.created[0].SendUsingAccount.SmtpAddress, "b@y.com")
 
-    def test_display_and_list(self):
+    def test_cc_and_list(self):
         app = App()
         s = sender_with(app, "a@x.com")
-        s.display(to=["z@z.com"], subject="s", body="b", sender=None)
-        self.assertEqual(app.created[0].log, ["display"])
+        s.deliver(to=["z@z.com"], cc=["c@c.com", "d@d.com"], subject="s", body="b", sender=None, draft=True)
+        self.assertEqual(app.f_a.saved[0].CC, "c@c.com; d@d.com")
+        s.deliver(to=["z@z.com"], subject="s", body="b", sender=None, draft=True)
+        self.assertFalse(hasattr(app.f_a.saved[1], "CC"))
         self.assertEqual(s.list_accounts(), ["a@x.com", "b@y.com"])
-
-
-class UrlTests(unittest.TestCase):
-    ID = "0a1b2c3d-0000-4000-8000-0123456789ab"
-
-    def test_parse(self):
-        self.assertEqual(abrir_outlook.parse_url(f'"automatiza-outlook://abrir?id={self.ID}"'), self.ID)
-        for bad in ("http://x/?id=" + self.ID, "automatiza-outlook://abrir?id=1;drop", "automatiza-outlook://abrir", ""):
-            self.assertIsNone(abrir_outlook.parse_url(bad))
 
 
 if __name__ == "__main__":

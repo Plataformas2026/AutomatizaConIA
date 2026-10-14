@@ -7,6 +7,7 @@ Es puro: recibe tablas en memoria y devuelve solo nº de fila. No hace I/O ni re
 """
 from __future__ import annotations
 
+import calendar
 import hashlib
 import math
 import re
@@ -19,7 +20,11 @@ import email_render
 OPERATORS = (
     "gt", "gte", "lt", "lte", "eq", "neq",
     "contains", "not_contains", "starts_with", "is_empty", "is_not_empty",
+    "elapsed", "on_date",  # solo columnas de fecha: dependen del día de hoy
 )
+TIME_OPERATORS = ("elapsed", "on_date")
+TIME_UNITS = ("days", "weeks", "months", "years")
+MAX_ELAPSED = 3650
 UNARY = ("is_empty", "is_not_empty")
 SEVERITIES = ("info", "warning", "critical")
 
@@ -154,6 +159,39 @@ def to_date(v: Any) -> Optional[int]:
     return None
 
 
+def today_day(today: Optional[date] = None) -> int:
+    """Día de hoy (nº de días desde 1970) con la fecha de TU ordenador."""
+    d = today or date.today()
+    return (d - date(1970, 1, 1)).days
+
+
+def add_units(day: int, n: int, unit: str) -> int:
+    """Suma `n` unidades a un día. Los meses/años respetan el calendario (31 ene + 1 mes = 28/29 feb)."""
+    if unit == "days":
+        return day + n
+    if unit == "weeks":
+        return day + 7 * n
+    d = date(1970, 1, 1) + timedelta(days=day)
+    months = d.year * 12 + (d.month - 1) + (12 * n if unit == "years" else n)
+    y, m = divmod(months, 12)
+    last = calendar.monthrange(y, m + 1)[1]
+    return (date(y, m + 1, min(d.day, last)) - date(1970, 1, 1)).days
+
+
+def looks_like_dates(values: list[Any]) -> bool:
+    """¿Al menos el 60 % de los valores con contenido son fechas? (para ofrecer las opciones de fecha)."""
+    filled = dates = 0
+    for v in values:
+        if is_empty(v):
+            continue
+        filled += 1
+        if to_date(v) is not None:
+            dates += 1
+        if filled >= 200:
+            break
+    return filled > 0 and dates / filled >= 0.6
+
+
 def _text(v: Any) -> str:
     return js_string(v).strip().lower()
 
@@ -169,7 +207,17 @@ def _order(a: Any, b: Any) -> Optional[int]:
 
 
 # ── Comparación ─────────────────────────────────────────────────────────
-def compare(left: Any, op: str, right: Any) -> bool:
+def compare(left: Any, op: str, right: Any, unit: str = "days", today: Optional[int] = None) -> bool:
+    if op == "elapsed":
+        # «Han pasado al menos N días/semanas/meses/años desde la fecha de la celda».
+        day, n = to_date(left), to_number(right)
+        if day is None or n is None or not float(n).is_integer() or not 0 <= n <= MAX_ELAPSED:
+            return False
+        return (today_day() if today is None else today) >= add_units(day, int(n), unit)
+    if op == "on_date":
+        # «Ya llegó la fecha elegida»: desde ese día, avisa de las filas que tienen una fecha.
+        day, target = to_date(left), to_date(right)
+        return day is not None and target is not None and (today_day() if today is None else today) >= target
     if op == "is_empty":
         return is_empty(left)
     if op == "is_not_empty":
@@ -210,69 +258,98 @@ class Rule:
     right_type: Optional[str]  # 'column' | 'value' | None
     right: Any
     actions: list[dict]
+    unit: str = "days"  # unidad de «elapsed»
     emails: list[dict] = field(default_factory=list)  # acciones «correo» (el envío lo decide la web o este agente)
 
 
-def validate_rule(raw: dict) -> Optional[Rule]:
-    """Las reglas vienen de la base de datos: se tratan como no fiables (igual que en la web)."""
+def check_rule(raw: dict) -> tuple[Optional[Rule], str]:
+    """Valida una regla guardada en la base de datos (no es de fiar). Devuelve (regla, motivo).
+    Si no es válida, `motivo` explica QUÉ campo falla (nunca incluye datos de las celdas)."""
     try:
         cond = raw["condition"]
-        if cond.get("kind") != "compare":
-            return None
+        if not isinstance(cond, dict) or cond.get("kind") != "compare":
+            return None, "la condición no es de tipo «compare»"
         left = cond["left"]
         if left.get("type") != "column" or not isinstance(left.get("column"), str):
-            return None
+            return None, "falta la columna de la condición"
         column = left["column"].strip()
         if not 1 <= len(column) <= 200:
-            return None
+            return None, "el nombre de la columna es demasiado largo o está vacío"
         op = cond["operator"]
         if op not in OPERATORS:
-            return None
+            return None, f"operador desconocido «{str(op)[:30]}»"
 
         right_type, right = None, None
         if op not in UNARY:
             r = cond.get("right")
             if not isinstance(r, dict):
-                return None
+                return None, "falta el segundo operando de la condición"
             if r.get("type") == "column" and isinstance(r.get("column"), str) and r["column"].strip():
                 right_type, right = "column", r["column"].strip()
             elif r.get("type") == "value" and isinstance(r.get("value"), (str, int, float)) and not isinstance(r.get("value"), bool):
                 right_type, right = "value", r["value"]
             else:
-                return None
+                return None, "el segundo operando de la condición no es válido"
+            if op == "elapsed":
+                n = to_number(right) if right_type == "value" else None
+                if n is None or not float(n).is_integer() or not 0 <= n <= MAX_ELAPSED:
+                    return None, f"«ha pasado al menos…» necesita un número entero de 0 a {MAX_ELAPSED}"
+            if op == "on_date" and (right_type != "value" or not isinstance(right, str)
+                                    or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", right) or to_date(right) is None):
+                return None, "«ya llegó la fecha elegida» necesita una fecha del calendario"
+        unit = cond.get("unit") or "days"
+        if unit not in TIME_UNITS:
+            return None, f"unidad de tiempo desconocida «{str(unit)[:20]}»"
 
         actions: list[dict] = []
         emails: list[dict] = []
-        total = 0
-        for a in raw.get("actions") or []:
-            total += 1
-            if a.get("type") == "email":
+        items = raw.get("actions") or []
+        if not isinstance(items, list):
+            return None, "las acciones no son una lista"
+        if len(items) > 5:
+            return None, "más de 5 acciones"
+        for i, a in enumerate(items, 1):
+            if not isinstance(a, dict):
+                return None, f"la acción {i} no es válida"
+            kind = a.get("type")
+            if kind == "email":
                 to, subject, body = a.get("to"), a.get("subject"), a.get("body")
-                sender, mode = a.get("from") or "", a.get("mode", "per_row")
-                if not all(isinstance(x, str) for x in (to, subject, body, sender)):
-                    return None
-                to, subject, body, sender = to.strip(), subject.strip(), body.strip(), sender.strip()
-                if not (1 <= len(to) <= 500 and 1 <= len(subject) <= 200 and 1 <= len(body) <= 4000 and len(sender) <= 254):
-                    return None
+                sender, mode, cc = a.get("from") or "", a.get("mode") or "per_row", a.get("cc") or ""
+                if not all(isinstance(x, str) for x in (to, subject, body, sender, cc)):
+                    return None, f"la acción {i} (correo) tiene un campo que no es texto"
+                to, subject, body, sender, cc = to.strip(), subject.strip(), body.strip(), sender.strip(), cc.strip()
+                for label, val, lo, hi in (("destinatario", to, 1, 500), ("copia", cc, 0, 500), ("asunto", subject, 1, 200),
+                                           ("cuerpo", body, 1, 4000), ("remitente", sender, 0, 254)):
+                    if not lo <= len(val) <= hi:
+                        return None, f"correo: {label} vacío o demasiado largo"
                 if mode not in ("per_row", "summary"):
-                    return None
-                emails.append({"from": sender, "to": to, "subject": subject, "body": body, "mode": mode})
+                    return None, f"correo: modo desconocido «{str(mode)[:20]}»"
+                emails.append({"from": sender, "to": to, "cc": cc, "subject": subject, "body": body, "mode": mode})
                 continue
-            if a.get("type") != "alert" or not isinstance(a.get("message"), str):
-                return None
+            if kind != "alert":
+                return None, f"tipo de acción «{str(kind)[:20]}» no soportado por esta versión del agente"
+            if not isinstance(a.get("message"), str):
+                return None, f"la acción {i} (alerta) no tiene mensaje"
             msg = a["message"].strip()
             if not 1 <= len(msg) <= 500:
-                return None
+                return None, "el mensaje de la alerta está vacío o es demasiado largo"
             sev = a.get("severity", "info")
             actions.append({"message": msg, "severity": sev if sev in SEVERITIES else "info"})
-        if total > 5:
-            return None
-        return Rule(str(raw["id"]), str(raw["name"]), column, op, right_type, right, actions, emails)
-    except (KeyError, TypeError, AttributeError):
-        return None
+        if not actions and not emails:
+            return None, "la regla no tiene ninguna acción"
+        return Rule(str(raw["id"]), str(raw["name"]), column, op, right_type, right, actions, unit=unit, emails=emails), ""
+    except KeyError as e:
+        return None, f"falta el campo {e}"
+    except (TypeError, AttributeError):
+        return None, "estructura de la regla inesperada"
 
 
-def evaluate_rule(rule: Rule, table: Table) -> tuple[list[int], Optional[str]]:
+def validate_rule(raw: dict) -> Optional[Rule]:
+    return check_rule(raw)[0]
+
+
+def evaluate_rule(rule: Rule, table: Table, today: Optional[int] = None) -> tuple[list[int], Optional[str]]:
+    today = today_day() if today is None else today
     headers = set(table.headers)
     needed = [rule.left] + ([rule.right] if rule.right_type == "column" else [])
     for col in needed:
@@ -288,12 +365,12 @@ def evaluate_rule(rule: Rule, table: Table) -> tuple[list[int], Optional[str]]:
             right = rule.right
         else:
             right = None
-        if compare(left, rule.operator, right):
+        if compare(left, rule.operator, right, rule.unit, today):
             matched.append(row.number)
     return matched, None
 
 
-def evaluate_across_sheets(rule: Rule, sheets: list[SheetTable]) -> MultiSheetEvaluation:
+def evaluate_across_sheets(rule: Rule, sheets: list[SheetTable], today: Optional[int] = None) -> MultiSheetEvaluation:
     """Evalúa en cada hoja; solo hay error si NINGUNA hoja tiene las columnas de la regla."""
     if not sheets:
         return MultiSheetEvaluation(error="No hay hojas que vigilar: revisa la selección de hojas")
@@ -301,7 +378,7 @@ def evaluate_across_sheets(rule: Rule, sheets: list[SheetTable]) -> MultiSheetEv
     results: list[SheetEvaluation] = []
     first_error: Optional[str] = None
     for s in sheets:
-        matched, err = evaluate_rule(rule, s.table)
+        matched, err = evaluate_rule(rule, s.table, today)
         if err:
             first_error = first_error or err
             continue
@@ -357,7 +434,7 @@ def build_outputs(rule: Rule, evaluation: MultiSheetEvaluation, previous: dict[s
     tables = {s.sheet_name: s.table for s in (sheets or [])}
     columns: list[str] = []
     for em in rule.emails:
-        columns += [c for c in email_render.referenced_columns([em["to"], em["subject"], em["body"]]) if c not in columns]
+        columns += [c for c in email_render.referenced_columns([em["to"], em.get("cc", ""), em["subject"], em["body"]]) if c not in columns]
 
     for sheet in evaluation.sheets:
         key = sheet.sheet_name or ""

@@ -42,11 +42,39 @@ async function handle(req: Request) {
     }
   }
 
+  // Reglas de fecha («ha pasado al menos…», «ya llegó la fecha»): dependen del día de hoy, así que se
+  // reevalúan cada día aunque el archivo no haya cambiado.
+  let dateChecked = 0;
+  const { data: dateRules } = await admin
+    .from('rules')
+    .select('file_id')
+    .eq('enabled', true)
+    .in('condition->>operator', ['elapsed', 'on_date'])
+    .limit(500);
+  const dateFileIds = [...new Set((dateRules ?? []).map((r) => r.file_id as string))].slice(0, 50);
+  if (dateFileIds.length) {
+    const { data: dateFiles } = await admin
+      .from('shared_files_metadata')
+      .select('id')
+      .in('id', dateFileIds)
+      .eq('source', 'drive')
+      .eq('status', 'active');
+    for (const f of dateFiles ?? []) {
+      try {
+        await processFile(f.id, { force: true });
+        dateChecked++;
+      } catch (e) {
+        failed++;
+        console.error('[cron/date-rules]', e instanceof Error ? e.name : 'UnknownError');
+      }
+    }
+  }
+
   // Limpieza de correos: resueltos > 7 días y pendientes olvidados > 30 días (no se acumulan datos).
   const { error: purgeError } = await admin.rpc('purge_email_outbox');
   if (purgeError) console.error('[cron/purge-outbox]', purgeError.code ?? 'error');
 
-  return Response.json({ checked: files?.length ?? 0, renewed, failed });
+  return Response.json({ checked: files?.length ?? 0, renewed, failed, dateChecked });
 }
 
 // Vercel Cron usa GET; pg_net (Supabase) usa POST.

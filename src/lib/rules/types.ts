@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { OPERATORS, isUnary } from './operators';
+import { MAX_ELAPSED, OPERATORS, TIME_UNITS, isUnary } from './operators';
 
 /* ── Operandos ─────────────────────────────────────────────── */
 const columnOperand = z.object({
@@ -23,11 +23,26 @@ export const conditionSchema = z
     kind: z.literal('compare'),
     left: columnOperand,
     operator: z.enum(OPERATORS),
+    /** Solo con `elapsed`: días (por defecto), semanas, meses o años. */
+    unit: z.enum(TIME_UNITS).optional(),
     right: operandSchema.optional(),
   })
   .superRefine((c, ctx) => {
     if (!isUnary(c.operator) && !c.right) {
       ctx.addIssue({ code: 'custom', path: ['right'], message: 'Falta el segundo operando' });
+      return;
+    }
+    if (c.operator === 'elapsed') {
+      const v = c.right?.type === 'value' ? c.right.value : null;
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > MAX_ELAPSED) {
+        ctx.addIssue({ code: 'custom', path: ['right'], message: `Indica cuánto tiempo: un número entero entre 0 y ${MAX_ELAPSED}` });
+      }
+    }
+    if (c.operator === 'on_date') {
+      const v = c.right?.type === 'value' ? c.right.value : null;
+      if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(Date.parse(`${v}T00:00:00Z`))) {
+        ctx.addIssue({ code: 'custom', path: ['right'], message: 'Elige una fecha del calendario' });
+      }
     }
   });
 
@@ -48,6 +63,8 @@ export const emailActionSchema = z.object({
   type: z.literal('email'),
   /** Cuenta desde la que debe salir (opcional). Sin variables. */
   from: z.union([z.literal(''), z.string().trim().email().max(254)]).default(''),
+  /** Destinatarios en copia (opcional). Admite {col:Columna} igual que `to`. */
+  cc: z.string().trim().max(500).default(''),
   to: z.string().trim().min(1).max(500),
   subject: z.string().trim().min(1).max(200),
   body: z.string().trim().min(1).max(4000),

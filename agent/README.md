@@ -216,6 +216,10 @@ Para que el agente los gestione con el Outlook de escritorio de tu PC (Windows, 
 
 **Varias cuentas en Outlook.** Añade a `.env` `OUTLOOK_ACCOUNT_EMAIL=tu_cuenta@dominio.com`: los borradores se crean en la carpeta Borradores de ESA cuenta (y los envíos salen desde ella). Si una regla indica su propio remitente, manda el de la regla. `comprobar_agente.bat` lista las cuentas de tu Outlook.
 
-**Botón «Abrir en Outlook» (Outlook clásico).** Ejecuta una vez `registrar_abrir_outlook.ps1` (clic derecho → Ejecutar con PowerShell). Después, el botón de la pestaña **Correos** abre el correo en tu Outlook clásico de escritorio. Funciona aunque `EMAIL_MODE=off`.
+**Copia (CC).** Al crear la regla puedes indicar destinatarios en copia (fijos o con `{col:Columna}`). En modo `send`, la copia también debe estar en `EMAIL_ALLOWED_DOMAINS`.
+
+**Alertas por fecha.** Para columnas de fecha hay dos opciones nuevas: «ha pasado al menos N días/semanas/meses/años» y «ya llegó la fecha elegida». Dependen del día de hoy: el agente reevalúa esas reglas una vez al día aunque el archivo no cambie (con la fecha de tu ordenador).
+
+**Vista previa y abrir carpeta desde la web.** Añade a `.env` `WEB_ORIGIN=https://tu-app.vercel.app`. El agente abre un servidor solo en `127.0.0.1:47821` que únicamente responde a esa web. Funciona con Chrome/Edge en este mismo ordenador (Safari bloquea este tipo de conexión).
 
 Seguridad: el contenido de una celda de Excel acaba en el correo. Por eso en modo `send` solo se envía a dominios que tú autorizas. Un correo con destinatario no válido o fuera de esos dominios queda pendiente en la web con el motivo. Si el remitente de la regla no coincide con una cuenta de tu Outlook, también queda pendiente.

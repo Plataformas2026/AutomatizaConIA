@@ -30,11 +30,12 @@ from typing import Optional
 from api import Api, ApiError, ApiUnavailable, TokenError
 from config import Config, ConfigError, load_config
 import email_render
+import localapi
 import engine
 import outlook
 import readers
 
-VERSION = "1.2.0"
+VERSION = "1.4.0"
 LOCK_PORT = 47653  # evita dos agentes a la vez (se libera sola al cerrar)
 log = logging.getLogger("agente")
 
@@ -212,6 +213,9 @@ class Agent:
     def _cfg_sig(self, f: dict) -> str:
         parts = [f["name"], f.get("path") or "", f.get("sheet_mode"), sorted(f.get("sheet_names") or []),
                  [(r["id"], r.get("updated_at")) for r in f.get("rules", [])]]
+        # Las reglas de fecha dependen del día de hoy: al cambiar el día se vuelven a evaluar aunque el archivo no cambie.
+        if any((r.get("condition") or {}).get("operator") in engine.TIME_OPERATORS for r in f.get("rules", [])):
+            parts.append(engine.today_day())
         return hashlib.sha256(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
     def _needs_evaluation(self, fid: str, f: dict) -> bool:
@@ -338,16 +342,22 @@ class Agent:
             if recipients is None:
                 self.api.report_email(eid, "failed", "Destinatario no válido")
                 continue
+            cc_text = str(item.get("cc") or "").strip()
+            cc = email_render.parse_recipients(cc_text) if cc_text else []
+            if cc is None:
+                self.api.report_email(eid, "failed", "Copia (CC) no válida")
+                continue
             if mode == "send":
-                bad = [r for r in recipients if r.rsplit("@", 1)[-1].lower() not in self.cfg.email_allowed_domains]
+                # La copia también debe estar en los dominios autorizados.
+                bad = [r for r in recipients + cc if r.rsplit("@", 1)[-1].lower() not in self.cfg.email_allowed_domains]
                 if bad:
-                    self.api.report_email(eid, "failed", "Destinatario fuera de los dominios autorizados en EMAIL_ALLOWED_DOMAINS")
+                    self.api.report_email(eid, "failed", "Destinatario o copia fuera de los dominios autorizados en EMAIL_ALLOWED_DOMAINS")
                     continue
                 if len(recent) >= self.cfg.email_max_per_hour:
                     log.warning("Límite de %d correos por hora alcanzado; el resto queda pendiente.", self.cfg.email_max_per_hour)
                     break
             try:
-                self.outlook.deliver(to=recipients, subject=str(item.get("subject") or ""), body=str(item.get("body") or ""),
+                self.outlook.deliver(to=recipients, cc=cc, subject=str(item.get("subject") or ""), body=str(item.get("body") or ""),
                                      sender=(item.get("from") or None), draft=(mode == "draft"))
             except (outlook.OutlookRejected, outlook.OutlookUnavailable) as e:
                 log.warning("No se pudo entregar un correo a Outlook: %s", e)
@@ -395,8 +405,29 @@ class Agent:
             except Exception as e:
                 log.error("Error inesperado con un archivo: %s", type(e).__name__)
 
+    def _lookup_file(self, fid: str) -> Optional[tuple[dict, Path]]:
+        """Para el servidor local: solo archivos asignados por la web y ya resueltos dentro de WATCH_FOLDERS."""
+        path, cfg = self.paths.get(fid), self.files.get(fid)
+        return (cfg, path) if path is not None and cfg is not None and path.is_file() else None
+
+    def _start_local_api(self) -> Optional[localapi.LocalApi]:
+        if not self.cfg.web_origins:
+            log.info("Vista previa y «abrir carpeta» desactivados (falta WEB_ORIGIN en .env).")
+            return None
+        try:
+            srv = localapi.LocalApi(port=localapi.DEFAULT_PORT, origins=self.cfg.web_origins, version=VERSION,
+                                    lookup=self._lookup_file, max_bytes=self.cfg.max_file_bytes)
+            srv.start()
+        except OSError:
+            log.warning("No se pudo abrir el puerto local %d (¿ya está en uso?). La vista previa no estará disponible.",
+                        localapi.DEFAULT_PORT)
+            return None
+        log.info("Vista previa y «abrir carpeta» activos en 127.0.0.1:%d para %s", srv.port, ", ".join(self.cfg.web_origins))
+        return srv
+
     def run(self) -> int:
         self._start_observer()
+        local_srv = self._start_local_api()
         next_poll = 0.0
         next_mail = 0.0
         log.info("Agente %s en marcha. Carpetas autorizadas: %s", VERSION, "; ".join(str(f) for f in self.cfg.folders))
@@ -432,6 +463,8 @@ class Agent:
                     next_poll = time.monotonic() + self.cfg.poll_seconds
                 self.stop.wait(0.5)
         finally:
+            if local_srv:
+                local_srv.stop()
             if self.observer:
                 self.observer.stop()
                 self.observer.join(timeout=5)
@@ -500,6 +533,10 @@ def check(cfg: Config, api: Api) -> int:
                 print("  ⚠ Tienes varias cuentas: indica OUTLOOK_ACCOUNT_EMAIL en .env para elegir dónde se crean los borradores.")
         except (outlook.OutlookUnavailable, outlook.OutlookRejected) as e:
             print(f"  ✗ {e}")
+    if cfg.web_origins:
+        print(f"Vista previa y «abrir carpeta»: activos para {', '.join(cfg.web_origins)} (puerto {localapi.DEFAULT_PORT}).")
+    else:
+        print("Vista previa y «abrir carpeta»: DESACTIVADOS. Añade WEB_ORIGIN=https://tu-app.vercel.app a .env para activarlos.")
     agent = Agent(cfg, api)
     files = conf.get("files", [])
     print(f"Archivos asignados: {len(files)}")

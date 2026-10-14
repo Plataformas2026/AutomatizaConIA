@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { DRAG_MIME, type FileItem, type ProjectOption } from '@/lib/projects/types';
 import { FileActions } from '../FileActions';
 import { FileTypeIcon, IconMove } from '../Icons';
+import { FileIconButton, FilePeek } from './FilePeek';
 
 const STATUS_LABEL: Record<string, string> = {
   active: 'Activo',
@@ -34,6 +35,7 @@ export function FileList({ files, projects, currentProjectId, emptyText, readOnl
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState<Set<string>>(new Set());
+  const [peek, setPeek] = useState<FileItem | null>(null);
 
   // Solo cuentan los archivos que siguen en pantalla (tras mover o borrar).
   const chosen = files.filter((f) => selected.has(f.id)).map((f) => f.id);
@@ -152,7 +154,9 @@ export function FileList({ files, projects, currentProjectId, emptyText, readOnl
               onChange={() => toggle(f.id)}
               aria-label={`Seleccionar ${f.name}`}
             />
-            <FileTypeIcon mime={f.mimeType} />
+            <FileIconButton name={f.name} onOpen={() => setPeek(f)}>
+              <FileTypeIcon mime={f.mimeType} />
+            </FileIconButton>
             <div className="grow">
               <Link href={`/files/${f.id}`} className="file-name" draggable={false}>
                 {f.name}
@@ -173,6 +177,8 @@ export function FileList({ files, projects, currentProjectId, emptyText, readOnl
           </li>
         ))}
       </ul>
+
+      <FilePeek file={peek} onClose={() => setPeek(null)} />
 
       <dialog ref={dialogRef} className="dialog" onClose={() => setMoving(null)} aria-labelledby="move-dialog-title">
         {moving && (

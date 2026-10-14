@@ -75,7 +75,8 @@ class OutlookSender:
             pass
         raise OutlookRejected(f"No se encontró la carpeta Borradores de la cuenta {wanted}.")
 
-    def deliver(self, *, to: list[str], subject: str, body: str, sender: Optional[str], draft: bool) -> None:
+    def deliver(self, *, to: list[str], subject: str, body: str, sender: Optional[str], draft: bool,
+                cc: Optional[list[str]] = None) -> None:
         app = self._outlook()
         try:
             address = (sender or "").strip() or self.default_account
@@ -84,6 +85,8 @@ class OutlookSender:
             # Creado dentro de Borradores de la cuenta elegida; sin cuenta, en el buzón predeterminado.
             mail = folder.Items.Add(0) if folder is not None else app.CreateItem(0)  # 0 = olMailItem
             mail.To = "; ".join(to)
+            if cc:
+                mail.CC = "; ".join(cc)  # destinatarios en copia
             mail.Subject = subject
             mail.Body = body  # texto plano: nunca HTML, para no ejecutar nada que venga de las celdas
             if acc is not None:
@@ -103,21 +106,3 @@ class OutlookSender:
         except Exception as e:
             # El mensaje de COM puede incluir el contenido del correo: solo el tipo.
             raise OutlookUnavailable(f"Outlook no aceptó el correo ({type(e).__name__}).") from None
-
-    def display(self, *, to: list[str], subject: str, body: str, sender: Optional[str]) -> None:
-        """Abre una ventana de redacción en Outlook clásico (sin guardar ni enviar nada)."""
-        app = self._outlook()
-        try:
-            address = (sender or "").strip() or self.default_account
-            acc = self._account(app, address) if address else None
-            mail = app.CreateItem(0)
-            mail.To = "; ".join(to)
-            mail.Subject = subject
-            mail.Body = body
-            if acc is not None:
-                mail.SendUsingAccount = acc
-            mail.Display()
-        except (OutlookRejected, OutlookUnavailable):
-            raise
-        except Exception as e:
-            raise OutlookUnavailable(f"Outlook no pudo abrir el correo ({type(e).__name__}).") from None

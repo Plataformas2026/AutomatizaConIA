@@ -138,6 +138,8 @@ export interface EmailDraft {
   key: string;
   from: string;
   to: string;
+  /** Destinatarios en copia ('' si no hay). */
+  cc: string;
   subject: string;
   body: string;
   /** Por qué no se puede enviar solo (destinatario no válido, columna desaparecida…). */
@@ -167,23 +169,26 @@ export function buildEmails(
   headers: string[],
 ): EmailDraft[] {
   if (matched.length === 0) return [];
-  const used = referencedColumns([action.to, action.subject, action.body]);
+  const used = referencedColumns([action.to, action.cc, action.subject, action.body]);
   const missing = used.filter((c) => !headers.includes(c));
 
   const make = (rows: MatchedRow[], perRow: boolean): EmailDraft => {
     const to = oneLine(renderTemplate(action.to, meta, rows, perRow));
+    const cc = oneLine(renderTemplate(action.cc ?? '', meta, rows, perRow));
     const subject = oneLine(renderTemplate(action.subject, meta, rows, perRow)).slice(0, 200);
     const body = renderTemplate(action.body, meta, rows, perRow).replace(/\r\n?/g, '\n').slice(0, 6000);
     let problem: string | null = null;
     if (missing.length) problem = `La columna «${missing[0]}» ya no existe en el archivo.`;
     else if (!to) problem = 'El destinatario está vacío en esta fila.';
     else if (!parseRecipients(to)) problem = `El destinatario «${to.slice(0, 80)}» no es una dirección de correo válida.`;
+    else if (cc && !parseRecipients(cc)) problem = `La copia «${cc.slice(0, 80)}» no es una dirección de correo válida.`;
     return {
       sheet: meta.sheetName,
       row: perRow ? rows[0].rowNumber : null,
       key: dedupeKey(ruleId, meta.sheetName, subject, to, body),
       from: action.from,
       to,
+      cc,
       subject,
       body,
       problem,

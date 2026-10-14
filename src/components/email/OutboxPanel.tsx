@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { openInOutlookLink } from '@/lib/email/links';
 import { IconCheck, IconFolder, IconMail, IconTable } from '../Icons';
 
 export interface OutboxItem {
@@ -13,6 +12,7 @@ export interface OutboxItem {
   rowNumber: number | null;
   from: string | null;
   to: string;
+  cc: string;
   subject: string;
   body: string;
   problem: string | null;
@@ -49,7 +49,7 @@ export function OutboxPanel({ items: initial, projects }: { items: OutboxItem[];
   }
 
   async function copy(item: OutboxItem) {
-    const text = `Para: ${item.to}\nAsunto: ${item.subject}\n\n${item.body}`;
+    const text = `Para: ${item.to}${item.cc ? `\nCC: ${item.cc}` : ''}\nAsunto: ${item.subject}\n\n${item.body}`;
     try {
       await navigator.clipboard.writeText(text);
       setCopied(item.id);
@@ -94,7 +94,6 @@ export function OutboxPanel({ items: initial, projects }: { items: OutboxItem[];
 
       <ul className="alert-list">
         {visible.map((i) => {
-          const sendable = !i.problem && !!i.to;
           return (
             <li key={i.id} className={`alert-item sev-${i.problem ? 'warning' : 'info'} is-open`}>
               <span className="alert-sev" title="Correo pendiente">
@@ -120,6 +119,12 @@ export function OutboxPanel({ items: initial, projects }: { items: OutboxItem[];
                 </div>
                 <p className="muted" style={{ margin: '6px 0 0' }}>
                   <strong>Para:</strong> {i.to || '(sin destinatario)'}
+                  {i.cc && (
+                    <>
+                      {' · '}
+                      <strong>CC:</strong> {i.cc}
+                    </>
+                  )}
                   {i.from && (
                     <>
                       {' · '}
@@ -134,12 +139,6 @@ export function OutboxPanel({ items: initial, projects }: { items: OutboxItem[];
                 </time>
               </div>
               <div className="alert-actions">
-                {sendable && (
-                  <a className="btn primary" href={openInOutlookLink(i.id)}>
-                    <IconMail size={16} />
-                    Abrir en Outlook
-                  </a>
-                )}
                 <button type="button" className="btn" onClick={() => void copy(i)}>
                   {copied === i.id ? 'Copiado' : 'Copiar texto'}
                 </button>

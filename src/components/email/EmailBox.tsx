@@ -6,14 +6,16 @@ import { MESSAGE_VARIABLES, sampleValues } from '@/lib/messages/variables';
 export interface EmailDraftValue {
   from: string;
   to: string;
+  /** Destinatarios en copia (opcional). */
+  cc: string;
   subject: string;
   body: string;
   mode: 'per_row' | 'summary';
 }
 
-export const EMPTY_EMAIL: EmailDraftValue = { from: '', to: '', subject: '', body: '', mode: 'per_row' };
+export const EMPTY_EMAIL: EmailDraftValue = { from: '', to: '', cc: '', subject: '', body: '', mode: 'per_row' };
 
-type Field = 'to' | 'subject' | 'body';
+type Field = 'to' | 'cc' | 'subject' | 'body';
 
 const TOKEN = /\{(count|rows|column|sheet|file|rule)\}|\{col:([^{}]{1,200})\}/g;
 
@@ -67,7 +69,7 @@ export function EmailBox({ value, onChange, columns, hasSheets, fileName, ruleNa
     <div className="email-box">
       <p className="muted email-help">
         Esta regla preparará un correo con los datos de tu Excel. Si tu ordenador no está configurado para enviarlo solo,
-        aparecerá en tu Dashboard como «pendiente de enviar» para que lo revises y lo mandes tú. Nunca se envía nada en
+        aparecerá en la pestaña Correos como «pendiente de enviar» para que lo revises y lo mandes tú. Nunca se envía nada en
         tu nombre sin tu permiso.
       </p>
 
@@ -105,7 +107,7 @@ export function EmailBox({ value, onChange, columns, hasSheets, fileName, ruleNa
       </div>
 
       <div className="field">
-        <label htmlFor="em-var">Insertar un dato en el destinatario, el asunto o el mensaje</label>
+        <label htmlFor="em-var">Insertar un dato en el destinatario, la copia, el asunto o el mensaje</label>
         <select id="em-var" value="" onChange={(e) => insert(e.target.value)}>
           <option value="">Elige un dato…</option>
           <optgroup label="Columnas de tu Excel (cambian en cada fila)">
@@ -143,6 +145,22 @@ export function EmailBox({ value, onChange, columns, hasSheets, fileName, ruleNa
       </div>
 
       <div className="field">
+        <label htmlFor="em-cc">Con copia (CC) — opcional</label>
+        <input
+          id="em-cc"
+          ref={(el) => {
+            refs.current.cc = el;
+          }}
+          maxLength={500}
+          value={value.cc}
+          onFocus={() => setLast('cc')}
+          onChange={(e) => set('cc', e.target.value)}
+          placeholder="jefe@tuempresa.com; administracion@tuempresa.com"
+        />
+        <span className="muted">Reciben una copia visible del correo. Varias direcciones se separan con punto y coma.</span>
+      </div>
+
+      <div className="field">
         <label htmlFor="em-subject">Asunto</label>
         <input
           id="em-subject"
@@ -177,7 +195,7 @@ export function EmailBox({ value, onChange, columns, hasSheets, fileName, ruleNa
         <div className="field">
           <span className="field-title">Así se verá (con datos de ejemplo)</span>
           <div className="outbox-body">
-            {`Para: ${preview(value.to, ctx) || '…'}\nAsunto: ${preview(value.subject, ctx)}\n\n${preview(value.body, ctx)}`}
+            {`Para: ${preview(value.to, ctx) || '…'}${value.cc ? `\nCC: ${preview(value.cc, ctx)}` : ''}\nAsunto: ${preview(value.subject, ctx)}\n\n${preview(value.body, ctx)}`}
           </div>
         </div>
       )}

@@ -48,7 +48,7 @@ class Api:
             if res.status_code in (401, 403):
                 raise ApiError("Clave anon rechazada: revisa SUPABASE_ANON_KEY")
             if res.status_code == 404:
-                raise ApiError("Faltan migraciones en Supabase: ejecuta 0007_local_agent.sql, 0008_project_sharing_email.sql y 0009_open_email.sql")
+                raise ApiError("Faltan migraciones en Supabase: ejecuta las migraciones 0007, 0008 y 0010 de supabase/migrations")
             raise ApiError(msg[:200] or f"HTTP {res.status_code}")
         return res.json() if res.content else None
 
@@ -73,10 +73,6 @@ class Api:
     def get_outbox(self) -> list[dict]:
         """Correos pendientes de enviar (ya redactados). Solo se piden si el envío automático está activado."""
         return self._call("agent_get_outbox", {}) or []
-
-    def get_email(self, email_id: str) -> Optional[dict]:
-        """Un correo concreto de la bandeja (pendiente o ya guardado en Borradores), para abrirlo en Outlook."""
-        return self._call("agent_get_email", {"p_id": email_id})
 
     def report_email(self, email_id: str, status: str, error: Optional[str] = None) -> None:
         """status: 'sent' (enviado), 'drafted' (borrador en Outlook) o 'failed'."""
