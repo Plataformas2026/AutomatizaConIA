@@ -1,0 +1,150 @@
+{
+ "ruleId": "r1",
+ "cells": [
+  {
+   "cell": "Ana López",
+   "keys": [
+    "ana lopez"
+   ]
+  },
+  {
+   "cell": "  ANA   lópez ",
+   "keys": [
+    "ana lopez"
+   ]
+  },
+  {
+   "cell": "ana@x.com",
+   "keys": [
+    "ana@x.com"
+   ]
+  },
+  {
+   "cell": "Ana <Ana@X.com>; Luis",
+   "keys": [
+    "ana@x.com",
+    "luis"
+   ]
+  },
+  {
+   "cell": "a@x.com, b@x.com",
+   "keys": [
+    "a@x.com",
+    "b@x.com"
+   ]
+  },
+  {
+   "cell": "Pérez, Ana",
+   "keys": [
+    "perez, ana"
+   ]
+  },
+  {
+   "cell": "",
+   "keys": []
+  },
+  {
+   "cell": null,
+   "keys": []
+  },
+  {
+   "cell": "   ",
+   "keys": []
+  },
+  {
+   "cell": 42,
+   "keys": [
+    "42"
+   ]
+  }
+ ],
+ "rows": [
+  [
+   2,
+   "Ana López"
+  ],
+  [
+   3,
+   "ana@x.com"
+  ],
+  [
+   4,
+   null
+  ],
+  [
+   5,
+   "Ana López; Luis"
+  ],
+  [
+   6,
+   "Luis"
+  ],
+  [
+   7,
+   ""
+  ]
+ ],
+ "assignees": {
+  "cf9dc2c2294ef8af": {
+   "n": 2,
+   "rows": [
+    2,
+    5
+   ]
+  },
+  "3b9bbfac5d5c8250": {
+   "n": 1,
+   "rows": [
+    3
+   ]
+  },
+  "26a36a74e7796c76": {
+   "n": 2,
+   "rows": [
+    4,
+    7
+   ]
+  },
+  "711c3624e4872c92": {
+   "n": 2,
+   "rows": [
+    5,
+    6
+   ]
+  }
+ },
+ "identifiers": {
+  "email": "ana@x.com",
+  "aliases": [
+   "Ana López"
+  ],
+  "expected": [
+   "ana@x.com",
+   "ana",
+   "ana lopez"
+  ]
+ },
+ "people": [
+  {
+   "email": "ana@x.com",
+   "aliases": [
+    "Ana López"
+   ],
+   "mine": 3
+  },
+  {
+   "email": "luis@x.com",
+   "aliases": [
+    "Luis"
+   ],
+   "mine": 2
+  },
+  {
+   "email": "otra@x.com",
+   "aliases": [],
+   "mine": 0
+  }
+ ],
+ "unassigned": "26a36a74e7796c76",
+ "unassignedCount": 2
+}

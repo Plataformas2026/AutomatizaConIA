@@ -8,3 +8,21 @@
 .admin-actions { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-left: auto; }
 .admin-field select { width: 100%; max-width: 420px; }
 .admin-tag { background: var(--violet-soft); color: var(--violet); margin-left: 6px; }
+
+/* Editor de condiciones (reglas compuestas) */
+.cond-group { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin: 8px 0 14px; background: var(--surface, transparent); }
+.cond-group.is-root { border-width: 2px; }
+.cond-group .cond-group { margin: 4px 0; background: var(--violet-soft); }
+.cond-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.cond-join { display: grid; gap: 4px; }
+.cond-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cond-op { display: inline-block; margin: 2px 0 6px; padding: 1px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--violet-soft); color: var(--violet); }
+.cond-leaf { padding: 4px 0; }
+.cond-remove { margin-top: 2px; }
+.cond-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.assign-box { margin-top: 14px; display: grid; gap: 10px; }
+
+/* Plantillas «Rellenar» */
+.tpl-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-top: 12px; }
+.tpl-field { font-size: 13px; padding: 2px 8px; border-radius: 6px; background: var(--violet-soft); color: var(--violet); }
+.admin-actions input { min-width: 220px; }

@@ -5,6 +5,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 HERE = Path(__file__).resolve().parent
 
@@ -47,6 +48,8 @@ class Config:
     outlook_account: str = ""
     # Direcciones de la web que pueden pedir la vista previa / abrir archivos de este PC (WEB_ORIGIN).
     web_origins: tuple[str, ...] = ()
+    # Carpeta donde se guardan los informes rellenados («Rellenar»). Por defecto: Documentos/AutomatizaIA.
+    fill_dir: Optional[Path] = None
 
     @property
     def state_file(self) -> Path:
@@ -111,6 +114,9 @@ def load_config(base_dir: Path = HERE) -> Config:
             raise ConfigError("WEB_ORIGIN debe ser la dirección de tu web sin nada más, p. ej. https://miapp.vercel.app")
         origins.append(o)
 
+    fill_raw = env.get("FILL_DIR", "").strip()
+    fill_dir = Path(fill_raw).expanduser() if fill_raw else Path.home() / "Documents" / "AutomatizaIA"
+
     return Config(
         supabase_url=url,
         anon_key=env["SUPABASE_ANON_KEY"],
@@ -125,4 +131,5 @@ def load_config(base_dir: Path = HERE) -> Config:
         email_max_per_hour=int(number("EMAIL_MAX_PER_HOUR", 20, 1)),
         outlook_account=outlook_account,
         web_origins=tuple(origins),
+        fill_dir=fill_dir,
     )

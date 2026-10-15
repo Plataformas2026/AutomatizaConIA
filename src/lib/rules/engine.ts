@@ -1,4 +1,4 @@
-import { MAX_ELAPSED, type Operator, type TimeUnit } from './operators';
+import { MAX_ELAPSED, isDateOperator, type Operator, type TimeUnit } from './operators';
 import type { Condition } from './types';
 import type { ParsedTable, SheetTable } from '../parsing/parse';
 
@@ -249,6 +249,41 @@ export function compare(left: unknown, op: Operator, right: unknown, ctx: Compar
 
 /* ── Evaluación de una regla sobre una tabla ───────────────── */
 
+/** Columnas que usa una condición (de cualquier nivel), sin repetir y en orden de aparición. */
+export function conditionColumns(c: Condition, out: string[] = []): string[] {
+  if (c.kind === 'group') {
+    for (const k of c.conditions) conditionColumns(k, out);
+    return out;
+  }
+  for (const col of [c.left.column, c.right?.type === 'column' ? c.right.column : null]) {
+    if (col !== null && !out.includes(col)) out.push(col);
+  }
+  return out;
+}
+
+/** Primera columna de la condición: es la que se muestra como «{column}» en los avisos. */
+export function primaryColumn(c: Condition): string {
+  return conditionColumns(c)[0] ?? '';
+}
+
+/** ¿Alguna condición depende del día de hoy? (entonces la regla se reevalúa cada día) */
+export function hasTimeOperator(c: Condition): boolean {
+  return c.kind === 'group' ? c.conditions.some(hasTimeOperator) : isDateOperator(c.operator);
+}
+
+/** Evalúa una condición (simple o grupo) sobre los valores de UNA fila.
+ *  AND: todas · OR: alguna. Se cortocircuita, pero el resultado no depende del orden. */
+export function evaluateCondition(c: Condition, values: Record<string, unknown>, ctx: CompareContext = {}): boolean {
+  if (c.kind === 'group') {
+    return c.op === 'and'
+      ? c.conditions.every((k) => evaluateCondition(k, values, ctx))
+      : c.conditions.some((k) => evaluateCondition(k, values, ctx));
+  }
+  const l = values[c.left.column];
+  const r = !c.right ? undefined : c.right.type === 'column' ? values[c.right.column] : c.right.value;
+  return compare(l, c.operator, r, { ...ctx, unit: c.unit });
+}
+
 export function evaluateRule(
   rule: { id: string; condition: Condition },
   table: Pick<ParsedTable, 'headers' | 'rows'>,
@@ -258,11 +293,7 @@ export function evaluateRule(
   const today = opts.today ?? todayDay();
   const headers = new Set(table.headers);
 
-  const missing = [
-    condition.left.column,
-    condition.right?.type === 'column' ? condition.right.column : null,
-  ].find((c) => c !== null && !headers.has(c));
-
+  const missing = conditionColumns(condition).find((c) => !headers.has(c));
   if (missing) {
     return {
       ruleId: rule.id,
@@ -274,13 +305,7 @@ export function evaluateRule(
 
   const matched: number[] = [];
   for (const row of table.rows) {
-    const l = row.values[condition.left.column];
-    const r = !condition.right
-      ? undefined
-      : condition.right.type === 'column'
-        ? row.values[condition.right.column]
-        : condition.right.value;
-    if (compare(l, condition.operator, r, { today, unit: condition.unit })) matched.push(row.rowNumber);
+    if (evaluateCondition(condition, row.values, { today })) matched.push(row.rowNumber);
   }
   return { ruleId: rule.id, matchedRows: matched, matchedCount: matched.length };
 }

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { AdminUserSelect } from '../AdminUserSelect';
 import { ProjectDialog } from '../projects/ProjectDialog';
+import { AliasesPanel, TemplatesPanel } from './TemplatesPanel';
 
 interface Overview {
   projects: { id: string; name: string; cover: string | null }[];
@@ -119,6 +120,13 @@ export function AdminPanel() {
               ))}
             </ul>
           </section>
+        </>
+      )}
+
+      {userId && data && (
+        <>
+          <TemplatesPanel userId={userId} files={data.files.map((f) => ({ id: f.id, name: f.name }))} />
+          <AliasesPanel userId={userId} />
         </>
       )}
 

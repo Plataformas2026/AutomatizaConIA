@@ -57,6 +57,13 @@ export default async function FilePage({ params }: { params: Promise<{ fileId: s
     .eq('file_id', fileId)
     .order('created_at', { ascending: false });
 
+  // Plantillas Word de la empresa dueña del archivo (las crea el administrador).
+  const { data: templates } = await db
+    .from('report_templates')
+    .select('id, name')
+    .eq('company_id', file.company_id)
+    .order('name', { ascending: true });
+
   return (
     <>
       <p className="back">
@@ -91,6 +98,7 @@ export default async function FilePage({ params }: { params: Promise<{ fileId: s
         isCsv={file.mime_type === 'text/csv'}
         initialRules={rules ?? []}
         ownerUserId={ownerUserId}
+        templates={(templates ?? []) as { id: string; name: string }[]}
       />
     </>
   );

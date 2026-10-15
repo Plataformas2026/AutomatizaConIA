@@ -35,7 +35,7 @@ import engine
 import outlook
 import readers
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 LOCK_PORT = 47653  # evita dos agentes a la vez (se libera sola al cerrar)
 log = logging.getLogger("agente")
 
@@ -214,7 +214,7 @@ class Agent:
         parts = [f["name"], f.get("path") or "", f.get("sheet_mode"), sorted(f.get("sheet_names") or []),
                  [(r["id"], r.get("updated_at")) for r in f.get("rules", [])]]
         # Las reglas de fecha dependen del día de hoy: al cambiar el día se vuelven a evaluar aunque el archivo no cambie.
-        if any((r.get("condition") or {}).get("operator") in engine.TIME_OPERATORS for r in f.get("rules", [])):
+        if any(engine.condition_has_time(r.get("condition")) for r in f.get("rules", [])):
             parts.append(engine.today_day())
         return hashlib.sha256(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
@@ -308,7 +308,7 @@ class Agent:
                 self.api.report_rule(fid, str(raw.get("id")), None, f"Regla no válida: {why}"[:300], None)
                 continue
             ev = engine.evaluate_across_sheets(rule, wb.sheets)
-            if rule.operator in engine.TIME_OPERATORS:
+            if rule.has_time:
                 self._warn_unreadable_dates(name, rule, wb.sheets)
             if ev.error:
                 self.api.report_rule(fid, rule.id, None, ev.error, None)
@@ -328,13 +328,14 @@ class Agent:
     @staticmethod
     def _warn_unreadable_dates(file_name: str, rule: engine.Rule, sheets: list) -> None:
         """Avisa en el log (solo nº de fila, nunca datos) de celdas de la columna que no se leen como fecha."""
+        cols = engine.date_columns(rule)
         for s in sheets:
-            if rule.left not in s.table.headers:
+            if any(c not in s.table.headers for c in cols):
                 continue
             bad = engine.unreadable_dates(rule, s.table)
             if bad:
-                log.warning("«%s»%s: %d celda(s) de «%s» no se reconocen como fecha (filas %s%s). Se ignoran.",
-                            file_name, f" hoja «{s.sheet_name}»" if s.sheet_name else "", len(bad), rule.left,
+                log.warning("«%s»%s: %d fila(s) con celdas de fecha (%s) que no se reconocen como fecha (filas %s%s). Se ignoran.",
+                            file_name, f" hoja «{s.sheet_name}»" if s.sheet_name else "", len(bad), ", ".join(cols),
                             ", ".join(map(str, bad[:10])), "…" if len(bad) > 10 else "")
 
     # ── Correos (Outlook) ───────────────────────────────────────────────
@@ -424,19 +425,24 @@ class Agent:
         path, cfg = self.paths.get(fid), self.files.get(fid)
         return (cfg, path) if path is not None and cfg is not None and path.is_file() else None
 
+    def _load_template(self, template_id: str) -> Optional[dict]:
+        """Plantilla (documento en blanco + mapeo) de la empresa de este agente."""
+        return self.api.get_template(template_id)
+
     def _start_local_api(self) -> Optional[localapi.LocalApi]:
         if not self.cfg.web_origins:
             log.info("Vista previa y «abrir carpeta» desactivados (falta WEB_ORIGIN en .env).")
             return None
         try:
             srv = localapi.LocalApi(port=localapi.DEFAULT_PORT, origins=self.cfg.web_origins, version=VERSION,
-                                    lookup=self._lookup_file, max_bytes=self.cfg.max_file_bytes)
+                                    lookup=self._lookup_file, max_bytes=self.cfg.max_file_bytes,
+                                    template_loader=self._load_template, fill_dir=self.cfg.fill_dir)
             srv.start()
         except OSError:
             log.warning("No se pudo abrir el puerto local %d (¿ya está en uso?). La vista previa no estará disponible.",
                         localapi.DEFAULT_PORT)
             return None
-        log.info("Vista previa y «abrir carpeta» activos en 127.0.0.1:%d para %s", srv.port, ", ".join(self.cfg.web_origins))
+        log.info("Vista previa, «abrir carpeta» y «Rellenar» activos en 127.0.0.1:%d para %s", srv.port, ", ".join(self.cfg.web_origins))
         return srv
 
     def run(self) -> int:

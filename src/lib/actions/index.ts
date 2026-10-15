@@ -2,6 +2,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Action, AlertAction, EmailAction } from '@/lib/rules/types';
 import { buildEmails, type MatchedRow } from '@/lib/email/render';
+import type { Assignees } from '@/lib/assign/assign';
 import { variablePattern, type VariableKey } from '@/lib/messages/variables';
 
 /**
@@ -28,6 +29,8 @@ export interface ActionContext {
   rows: MatchedRow[];
   /** Columnas que existen en la hoja donde se detectó. */
   headers: string[];
+  /** Reparto de las filas que cumplen la regla por persona (huellas, nunca nombres). null si la columna no existe. */
+  assignees?: (column: string) => Promise<Assignees | null>;
 }
 
 /** PRIVACIDAD: las plantillas solo admiten variables que NO provienen de las
@@ -47,6 +50,17 @@ export function renderMessage(template: string, ctx: ActionContext): string {
 }
 
 async function runAlert(action: AlertAction, ctx: ActionContext): Promise<void> {
+  const assignees = action.assignColumn && ctx.assignees ? await ctx.assignees(action.assignColumn) : null;
+  let templateId: string | null = null;
+  if (action.templateId) {
+    const { data } = await ctx.admin
+      .from('report_templates')
+      .select('id')
+      .eq('id', action.templateId)
+      .eq('company_id', ctx.companyId)
+      .maybeSingle();
+    templateId = (data?.id as string | undefined) ?? null;
+  }
   const { error } = await ctx.admin.from('alerts').insert({
     company_id: ctx.companyId,
     file_id: ctx.file.id,
@@ -58,6 +72,8 @@ async function runAlert(action: AlertAction, ctx: ActionContext): Promise<void> 
     severity: action.severity,
     matched_count: ctx.matchedCount,
     row_refs: ctx.rowRefs.slice(0, 200),
+    assignees: assignees ?? {},
+    template_id: templateId,
   });
   if (error) throw new Error(`No se pudo guardar la alerta: ${error.code ?? error.message}`);
 }

@@ -13,6 +13,12 @@ export interface AlertRow {
   severity: 'info' | 'warning' | 'critical';
   matched_count: number;
   row_refs: number[];
+  /** Reparto por persona: { huella: { n, rows } }. Nunca nombres ni correos. */
+  assignees?: Record<string, { n: number; rows: number[] }> | null;
+  rule_id?: string | null;
+  file_id?: string | null;
+  /** Plantilla que se rellena con «Rellenar». */
+  template_id?: string | null;
   status: 'open' | 'read' | 'dismissed';
   created_at: string;
   /** Proyecto al que pertenece la alerta (vinculado a través de su archivo). */

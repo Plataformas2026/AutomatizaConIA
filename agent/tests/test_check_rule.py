@@ -107,3 +107,57 @@ class DateOperators(unittest.TestCase):
         from datetime import date
         self.assertEqual(e.evaluate_rule(rule, table, e.today_day(date(2026, 10, 14)))[0], [2])
         self.assertEqual(e.evaluate_rule(rule, table, e.today_day(date(2026, 8, 20)))[0], [])
+
+
+class CompoundConditions(unittest.TestCase):
+    """Reglas multicondición: los mismos casos se ejecutan en la web (engine.test.ts)."""
+
+    @staticmethod
+    def _cases():
+        import json
+        from pathlib import Path
+        return json.loads((Path(__file__).parent / "compound_cases.json").read_text(encoding="utf-8"))
+
+    def test_shared_cases(self):
+        import engine as e
+        from datetime import date
+        for c in self._cases()["cases"]:
+            with self.subTest(c["name"]):
+                rule, why = e.check_rule({"id": "r1", "name": "n", "condition": c["condition"],
+                                          "actions": [{"type": "alert", "message": "m"}]})
+                self.assertIsNotNone(rule, why)
+                table = e.Table(sorted({k for r in c["rows"] for k in r["v"]}), [e.Row(r["n"], r["v"]) for r in c["rows"]])
+                today = None
+                if c.get("today"):
+                    y, m, d = map(int, c["today"].split("-"))
+                    today = e.to_date(date(y, m, d).isoformat())
+                matched, err = e.evaluate_rule(rule, table, today)
+                self.assertIsNone(err)
+                self.assertEqual(matched, c["expected"])
+
+    def test_valid_and_invalid(self):
+        import engine as e
+        for c in self._cases()["valid"]:
+            self.assertIsNotNone(e.parse_condition(c)[0], c)
+        for c in self._cases()["invalid"]:
+            tree, why = e.parse_condition(c)
+            self.assertIsNone(tree, c)
+            self.assertTrue(why)
+
+    def test_missing_column_in_any_branch(self):
+        import engine as e
+        c = self._cases()["cases"][0]
+        rule, _ = e.check_rule({"id": "r", "name": "n", "condition": c["condition"], "actions": [{"type": "alert", "message": "m"}]})
+        matched, err = e.evaluate_rule(rule, e.Table(["X"], [e.Row(2, {"X": "y"})]))
+        self.assertEqual(matched, [])
+        self.assertIn("«H»", err)
+
+    def test_has_time_and_columns(self):
+        import engine as e
+        c = self._cases()["cases"][6]
+        rule, _ = e.check_rule({"id": "r", "name": "n", "condition": c["condition"], "actions": [{"type": "alert", "message": "m"}]})
+        self.assertTrue(rule.has_time)
+        self.assertEqual(rule.columns, ["f", "done"])
+        self.assertEqual(e.date_columns(rule), ["f"])
+        self.assertTrue(e.condition_has_time(c["condition"]))
+        self.assertFalse(e.condition_has_time(self._cases()["cases"][0]["condition"]))

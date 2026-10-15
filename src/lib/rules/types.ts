@@ -15,10 +15,16 @@ const valueOperand = z.object({
 export const operandSchema = z.discriminatedUnion('type', [columnOperand, valueOperand]);
 
 /* ── Condición ─────────────────────────────────────────────────
- * Hoy: una comparación [Variable 1] [Operador] [Variable 2 | Valor].
- * `kind` deja abierta la puerta a grupos AND/OR en el futuro sin migrar
- * la tabla: {kind:'group', op:'and'|'or', conditions:[...]}.            */
-export const conditionSchema = z
+ * Dos formas (el agente y la web las evalúan igual):
+ *  · compare: [Columna] [Operador] [Columna | Valor]            (las reglas de siempre)
+ *  · group:   AND / OR de varias condiciones, anidables.
+ *    Ejemplo A:  X = «y»  Y  ( H está vacía  O  H contiene «K» )
+ *       {kind:'group', op:'and', conditions:[ compare(X eq y), {kind:'group', op:'or', conditions:[ compare(H is_empty), compare(H contains K) ]} ]}
+ * Límites: 12 condiciones simples y 3 niveles de anidación como máximo.  */
+export const MAX_CONDITION_LEAVES = 12;
+export const MAX_CONDITION_DEPTH = 3;
+
+const compareSchema = z
   .object({
     kind: z.literal('compare'),
     left: columnOperand,
@@ -46,6 +52,42 @@ export const conditionSchema = z
     }
   });
 
+export type CompareCondition = z.infer<typeof compareSchema>;
+export interface GroupCondition {
+  kind: 'group';
+  op: 'and' | 'or';
+  conditions: Condition[];
+}
+export type Condition = CompareCondition | GroupCondition;
+
+const groupSchema: z.ZodType<GroupCondition> = z.lazy(() =>
+  z.object({
+    kind: z.literal('group'),
+    op: z.enum(['and', 'or']),
+    conditions: z.array(looseConditionSchema).min(1).max(MAX_CONDITION_LEAVES),
+  }),
+);
+const looseConditionSchema: z.ZodType<Condition> = z.lazy(() => z.union([compareSchema, groupSchema]));
+
+/** Nº de condiciones simples y profundidad de un árbol. */
+export function conditionStats(c: Condition): { leaves: number; depth: number } {
+  if (c.kind === 'compare') return { leaves: 1, depth: 1 };
+  let leaves = 0;
+  let depth = 0;
+  for (const k of c.conditions) {
+    const s = conditionStats(k);
+    leaves += s.leaves;
+    depth = Math.max(depth, s.depth);
+  }
+  return { leaves, depth: depth + 1 };
+}
+
+export const conditionSchema = looseConditionSchema.superRefine((c, ctx) => {
+  const { leaves, depth } = conditionStats(c);
+  if (leaves > MAX_CONDITION_LEAVES) ctx.addIssue({ code: 'custom', message: `Máximo ${MAX_CONDITION_LEAVES} condiciones por regla` });
+  if (depth > MAX_CONDITION_DEPTH + 1) ctx.addIssue({ code: 'custom', message: `Máximo ${MAX_CONDITION_DEPTH} niveles de grupos` });
+});
+
 /* ── Acciones ──────────────────────────────────────────────────
  * Hoy solo 'alert'. Para añadir (email, webhook, Slack…):
  *  1) nuevo esquema aquí y pasar actionSchema a z.discriminatedUnion
@@ -54,6 +96,11 @@ export const alertActionSchema = z.object({
   type: z.literal('alert'),
   message: z.string().trim().min(1).max(500),
   severity: z.enum(['info', 'warning', 'critical']).default('info'),
+  /** Columna con el nombre/correo de la persona a quien corresponde cada fila (opcional).
+   *  Con ella la alerta sabe cuántas filas son de cada persona («3 te corresponden a ti»). */
+  assignColumn: z.string().trim().min(1).max(200).optional(),
+  /** Plantilla (creada por el administrador) que se rellena con los datos de la fila al pulsar «Rellenar». */
+  templateId: z.string().uuid().optional(),
 });
 
 /** Correo de Outlook. `to`, `subject` y `body` admiten {col:Columna} y las variables de las alertas.
@@ -99,7 +146,6 @@ export const updateRuleSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Nada que actualizar' });
 
-export type Condition = z.infer<typeof conditionSchema>;
 export type Action = z.infer<typeof actionSchema>;
 export type AlertAction = z.infer<typeof alertActionSchema>;
 export type EmailAction = z.infer<typeof emailActionSchema>;

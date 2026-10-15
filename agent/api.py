@@ -48,7 +48,7 @@ class Api:
             if res.status_code in (401, 403):
                 raise ApiError("Clave anon rechazada: revisa SUPABASE_ANON_KEY")
             if res.status_code == 404:
-                raise ApiError("Faltan migraciones en Supabase: ejecuta las migraciones 0007, 0008 y 0010 de supabase/migrations")
+                raise ApiError("Faltan migraciones en Supabase: ejecuta las migraciones 0007, 0008, 0010 y 0012 de supabase/migrations")
             raise ApiError(msg[:200] or f"HTTP {res.status_code}")
         return res.json() if res.content else None
 
@@ -69,6 +69,10 @@ class Api:
             "p_error": error, "p_alerts": alerts or [], "p_emails": emails or [],
         })
         return int(out or 0)
+
+    def get_template(self, template_id: str) -> Optional[dict]:
+        """Plantilla Word de TU empresa (documento en blanco + mapeo de campos). No contiene datos de filas."""
+        return self._call("agent_get_template", {"p_id": template_id})
 
     def get_outbox(self) -> list[dict]:
         """Correos pendientes de enviar (ya redactados). Solo se piden si el envío automático está activado."""

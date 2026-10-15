@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
+import assign as assign_mod
 import email_render
 
 OPERATORS = (
@@ -270,8 +271,9 @@ def looks_like_dates(values: list[Any], header: str = "") -> bool:
 
 def unreadable_dates(rule: "Rule", table: "Table") -> list[int]:
     """Nº de fila de las celdas con contenido que no se reconocen como fecha (solo números de fila, nunca datos)."""
+    cols = date_columns(rule)
     return [r.number for r in table.rows
-            if not is_empty(r.values.get(rule.left)) and to_date_loose(r.values.get(rule.left)) is None]
+            if any(not is_empty(r.values.get(c)) and to_date_loose(r.values.get(c)) is None for c in cols)]
 
 
 def _text(v: Any) -> str:
@@ -342,49 +344,167 @@ class Rule:
     actions: list[dict]
     unit: str = "days"  # unidad de «elapsed»
     emails: list[dict] = field(default_factory=list)  # acciones «correo» (el envío lo decide la web o este agente)
+    # Árbol de condiciones normalizado (simple o grupo AND/OR). Si es None, se usa la condición simple de arriba.
+    tree: Optional[dict] = None
+    assign_column: Optional[str] = None  # columna con la persona a quien corresponde cada fila
+    template_id: Optional[str] = None  # plantilla que se rellena con «Rellenar»
+
+    def condition(self) -> dict:
+        if self.tree is not None:
+            return self.tree
+        return {"kind": "compare", "column": self.left, "operator": self.operator,
+                "right_type": self.right_type, "right": self.right, "unit": self.unit}
+
+    @property
+    def columns(self) -> list[str]:
+        return tree_columns(self.condition())
+
+    @property
+    def has_time(self) -> bool:
+        return tree_has_time(self.condition())
+
+
+# ── Condiciones compuestas ──────────────────────────────────────────────
+MAX_LEAVES = 12
+MAX_DEPTH = 3
+_UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+def _parse_leaf(cond: dict) -> tuple[Optional[dict], str]:
+    left = cond.get("left")
+    if not isinstance(left, dict) or left.get("type") != "column" or not isinstance(left.get("column"), str):
+        return None, "falta la columna de la condición"
+    column = left["column"].strip()
+    if not 1 <= len(column) <= 200:
+        return None, "el nombre de la columna es demasiado largo o está vacío"
+    op = cond.get("operator")
+    if op not in OPERATORS:
+        return None, f"operador desconocido «{str(op)[:30]}»"
+
+    right_type, right = None, None
+    if op not in UNARY:
+        r = cond.get("right")
+        if not isinstance(r, dict):
+            return None, "falta el segundo operando de la condición"
+        if r.get("type") == "column" and isinstance(r.get("column"), str) and r["column"].strip():
+            right_type, right = "column", r["column"].strip()
+        elif r.get("type") == "value" and isinstance(r.get("value"), (str, int, float)) and not isinstance(r.get("value"), bool):
+            right_type, right = "value", r["value"]
+        else:
+            return None, "el segundo operando de la condición no es válido"
+        if op == "elapsed":
+            n = to_number(right) if right_type == "value" else None
+            if n is None or not float(n).is_integer() or not 0 <= n <= MAX_ELAPSED:
+                return None, f"«ha pasado al menos…» necesita un número entero de 0 a {MAX_ELAPSED}"
+        if op == "on_date" and (right_type != "value" or not isinstance(right, str)
+                                or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", right) or to_date(right) is None):
+            return None, "«ya llegó la fecha elegida» necesita una fecha del calendario"
+    unit = cond.get("unit") or "days"
+    if unit not in TIME_UNITS:
+        return None, f"unidad de tiempo desconocida «{str(unit)[:20]}»"
+    return {"kind": "compare", "column": column, "operator": op, "right_type": right_type, "right": right, "unit": unit}, ""
+
+
+def parse_condition(cond: Any) -> tuple[Optional[dict], str]:
+    """Valida y normaliza una condición guardada (no es de fiar): simple o grupo AND/OR anidado."""
+    leaves = [0]
+
+    def walk(c: Any, depth: int) -> tuple[Optional[dict], str]:
+        if not isinstance(c, dict):
+            return None, "la condición no es válida"
+        if c.get("kind") == "compare":
+            leaves[0] += 1
+            if leaves[0] > MAX_LEAVES:
+                return None, f"más de {MAX_LEAVES} condiciones"
+            return _parse_leaf(c)
+        if c.get("kind") == "group":
+            if depth > MAX_DEPTH:
+                return None, f"más de {MAX_DEPTH} niveles de grupos"
+            if c.get("op") not in ("and", "or"):
+                return None, "un grupo debe combinarse con «y» u «o»"
+            items = c.get("conditions")
+            if not isinstance(items, list) or not 1 <= len(items) <= MAX_LEAVES:
+                return None, "un grupo necesita entre 1 y %d condiciones" % MAX_LEAVES
+            out = []
+            for it in items:
+                node, why = walk(it, depth + 1)
+                if node is None:
+                    return None, why
+                out.append(node)
+            return {"kind": "group", "op": c["op"], "conditions": out}, ""
+        return None, "la condición no es de tipo «compare» ni «group»"
+
+    return walk(cond, 1)
+
+
+def _first_leaf(t: dict) -> dict:
+    return t if t["kind"] == "compare" else _first_leaf(t["conditions"][0])
+
+
+def _leaves(t: dict) -> list[dict]:
+    return [t] if t["kind"] == "compare" else [x for k in t["conditions"] for x in _leaves(k)]
+
+
+def tree_columns(t: dict) -> list[str]:
+    out: list[str] = []
+    for lf in _leaves(t):
+        for c in (lf["column"], lf["right"] if lf["right_type"] == "column" else None):
+            if c is not None and c not in out:
+                out.append(c)
+    return out
+
+
+def tree_has_time(t: dict) -> bool:
+    return any(lf["operator"] in TIME_OPERATORS for lf in _leaves(t))
+
+
+def eval_tree(t: dict, values: dict, today: Optional[int] = None) -> bool:
+    """AND: todas · OR: alguna. Mismo resultado que evaluateCondition de la web."""
+    if t["kind"] == "group":
+        f = all if t["op"] == "and" else any
+        return f(eval_tree(k, values, today) for k in t["conditions"])
+    left = values.get(t["column"])
+    if t["right_type"] == "column":
+        right = values.get(t["right"])
+    elif t["right_type"] == "value":
+        right = t["right"]
+    else:
+        right = None
+    return compare(left, t["operator"], right, t["unit"], today)
+
+
+def condition_has_time(raw: Any) -> bool:
+    """Para la firma de configuración del agente: ¿esta condición (sin validar) depende del día de hoy?"""
+    if not isinstance(raw, dict):
+        return False
+    if raw.get("kind") == "group":
+        return any(condition_has_time(k) for k in (raw.get("conditions") or []))
+    return raw.get("operator") in TIME_OPERATORS
+
+
+def date_columns(rule: "Rule") -> list[str]:
+    """Columnas sobre las que hay un operador de fecha (para avisar de celdas ilegibles)."""
+    out: list[str] = []
+    for lf in _leaves(rule.condition()):
+        if lf["operator"] in TIME_OPERATORS and lf["column"] not in out:
+            out.append(lf["column"])
+    return out
 
 
 def check_rule(raw: dict) -> tuple[Optional[Rule], str]:
     """Valida una regla guardada en la base de datos (no es de fiar). Devuelve (regla, motivo).
     Si no es válida, `motivo` explica QUÉ campo falla (nunca incluye datos de las celdas)."""
     try:
-        cond = raw["condition"]
-        if not isinstance(cond, dict) or cond.get("kind") != "compare":
-            return None, "la condición no es de tipo «compare»"
-        left = cond["left"]
-        if left.get("type") != "column" or not isinstance(left.get("column"), str):
-            return None, "falta la columna de la condición"
-        column = left["column"].strip()
-        if not 1 <= len(column) <= 200:
-            return None, "el nombre de la columna es demasiado largo o está vacío"
-        op = cond["operator"]
-        if op not in OPERATORS:
-            return None, f"operador desconocido «{str(op)[:30]}»"
-
-        right_type, right = None, None
-        if op not in UNARY:
-            r = cond.get("right")
-            if not isinstance(r, dict):
-                return None, "falta el segundo operando de la condición"
-            if r.get("type") == "column" and isinstance(r.get("column"), str) and r["column"].strip():
-                right_type, right = "column", r["column"].strip()
-            elif r.get("type") == "value" and isinstance(r.get("value"), (str, int, float)) and not isinstance(r.get("value"), bool):
-                right_type, right = "value", r["value"]
-            else:
-                return None, "el segundo operando de la condición no es válido"
-            if op == "elapsed":
-                n = to_number(right) if right_type == "value" else None
-                if n is None or not float(n).is_integer() or not 0 <= n <= MAX_ELAPSED:
-                    return None, f"«ha pasado al menos…» necesita un número entero de 0 a {MAX_ELAPSED}"
-            if op == "on_date" and (right_type != "value" or not isinstance(right, str)
-                                    or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", right) or to_date(right) is None):
-                return None, "«ya llegó la fecha elegida» necesita una fecha del calendario"
-        unit = cond.get("unit") or "days"
-        if unit not in TIME_UNITS:
-            return None, f"unidad de tiempo desconocida «{str(unit)[:20]}»"
+        tree, why = parse_condition(raw["condition"])
+        if tree is None:
+            return None, why
+        first = _first_leaf(tree)
+        column, op, right_type, right, unit = first["column"], first["operator"], first["right_type"], first["right"], first["unit"]
 
         actions: list[dict] = []
         emails: list[dict] = []
+        assign_column: Optional[str] = None
+        template_id: Optional[str] = None
         items = raw.get("actions") or []
         if not isinstance(items, list):
             return None, "las acciones no son una lista"
@@ -416,10 +536,22 @@ def check_rule(raw: dict) -> tuple[Optional[Rule], str]:
             if not 1 <= len(msg) <= 500:
                 return None, "el mensaje de la alerta está vacío o es demasiado largo"
             sev = a.get("severity", "info")
-            actions.append({"message": msg, "severity": sev if sev in SEVERITIES else "info"})
+            action = {"message": msg, "severity": sev if sev in SEVERITIES else "info"}
+            ac = a.get("assignColumn")
+            if ac is not None:
+                if not isinstance(ac, str) or not 1 <= len(ac.strip()) <= 200:
+                    return None, "la columna de reparto de la alerta no es válida"
+                assign_column = assign_column or ac.strip()
+            tid = a.get("templateId")
+            if tid is not None:
+                if not isinstance(tid, str) or not _UUID.match(tid):
+                    return None, "la plantilla de la alerta no es válida"
+                template_id = template_id or tid
+            actions.append(action)
         if not actions and not emails:
             return None, "la regla no tiene ninguna acción"
-        return Rule(str(raw["id"]), str(raw["name"]), column, op, right_type, right, actions, unit=unit, emails=emails), ""
+        return Rule(str(raw["id"]), str(raw["name"]), column, op, right_type, right, actions, unit=unit, emails=emails,
+                    tree=tree, assign_column=assign_column, template_id=template_id), ""
     except KeyError as e:
         return None, f"falta el campo {e}"
     except (TypeError, AttributeError):
@@ -433,23 +565,11 @@ def validate_rule(raw: dict) -> Optional[Rule]:
 def evaluate_rule(rule: Rule, table: Table, today: Optional[int] = None) -> tuple[list[int], Optional[str]]:
     today = today_day() if today is None else today
     headers = set(table.headers)
-    needed = [rule.left] + ([rule.right] if rule.right_type == "column" else [])
-    for col in needed:
+    for col in rule.columns:
         if col not in headers:
             return [], f"La columna «{col}» ya no existe en el archivo"
-
-    matched: list[int] = []
-    for row in table.rows:
-        left = row.values.get(rule.left)
-        if rule.right_type == "column":
-            right = row.values.get(rule.right)
-        elif rule.right_type == "value":
-            right = rule.right
-        else:
-            right = None
-        if compare(left, rule.operator, right, rule.unit, today):
-            matched.append(row.number)
-    return matched, None
+    tree = rule.condition()
+    return [row.number for row in table.rows if eval_tree(tree, row.values, today)], None
 
 
 def evaluate_across_sheets(rule: Rule, sheets: list[SheetTable], today: Optional[int] = None) -> MultiSheetEvaluation:
@@ -527,6 +647,12 @@ def build_outputs(rule: Rule, evaluation: MultiSheetEvaluation, previous: dict[s
         if fp == previous.get(key):
             continue
         refs = sheet.matched_rows[:200]
+        assignees: dict = {}
+        table_for_assign = tables.get(sheet.sheet_name)
+        if rule.assign_column and table_for_assign is not None and rule.assign_column in table_for_assign.headers:
+            wanted_rows = set(sheet.matched_rows)
+            assignees = assign_mod.build_assignees(
+                rule.id, [(r.number, r.values.get(rule.assign_column)) for r in table_for_assign.rows if r.number in wanted_rows])
         for action in rule.actions:
             alerts.append({
                 "sheet": sheet.sheet_name,
@@ -537,6 +663,8 @@ def build_outputs(rule: Rule, evaluation: MultiSheetEvaluation, previous: dict[s
                 "severity": action["severity"],
                 "count": sheet.matched_count,
                 "rows": refs,
+                **({"assignees": assignees} if assignees else {}),
+                **({"template": rule.template_id} if rule.template_id else {}),
             })
         table = tables.get(sheet.sheet_name)
         if rule.emails and table is not None:

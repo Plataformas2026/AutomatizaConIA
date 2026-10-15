@@ -9,6 +9,7 @@ Por qué es seguro y no guarda datos:
     encabezado propio, de modo que ninguna otra página abierta en tu navegador puede usarlo.
   · Solo conoce los archivos que la web le ha asignado y que están dentro de WATCH_FOLDERS.
   · La vista previa viaja de tu ordenador a tu navegador. NO pasa por Supabase ni por Vercel y no se guarda.
+  · «Rellenar»: el agente lee la fila aquí, rellena la plantilla Word y la abre. Los datos no salen del PC.
 """
 from __future__ import annotations
 
@@ -19,11 +20,13 @@ import re
 import subprocess
 import sys
 import threading
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Optional
 from urllib.parse import parse_qs, urlparse
 
+import docxfill
 import email_render
 import readers
 
@@ -85,18 +88,63 @@ def _cell(v: Any) -> str:
     return s[:CELL_CHARS]
 
 
+class FillError(Exception):
+    def __init__(self, code: str, status: int) -> None:
+        super().__init__(code)
+        self.code, self.status = code, status
+
+
+def _safe_name(text: str, limit: int = 60) -> str:
+    t = re.sub(r"[^\w.-]+", "_", text, flags=re.UNICODE).strip("._")
+    return t[:limit] or "informe"
+
+
+def fill_from_row(data: bytes, path: Path, file_cfg: dict, sheet: Optional[str], row: int, tpl: dict,
+                  out_dir: Path, now: Optional[datetime] = None) -> Path:
+    """Lee la fila `row` del archivo y la vuelca en la plantilla. Escribe el .docx en out_dir y devuelve su ruta."""
+    import base64
+
+    now = now or datetime.now()
+    mode, names = file_cfg.get("sheet_mode") or "first", file_cfg.get("sheet_names") or []
+    wb = readers.read_workbook(data, path.suffix, mode, names)
+    if sheet and sheet in wb.available:
+        wb = readers.read_workbook(data, path.suffix, "selected", [sheet])
+    if not wb.sheets:
+        raise FillError("sheet_not_found", 404)
+    chosen = wb.sheets[0]
+    found = next((r for r in chosen.table.rows if r.number == row), None)
+    if found is None:
+        raise FillError("row_not_found", 404)
+    try:
+        template = base64.b64decode(str(tpl.get("content_b64") or ""), validate=True)
+    except ValueError as e:
+        raise docxfill.TemplateError("plantilla dañada") from e
+    resolve = docxfill.make_resolver(chosen.table.headers, found.values, tpl.get("mapping") or {}, row=row,
+                                     today=docxfill.today_text(now), file_name=path.name, sheet=chosen.sheet_name)
+    out = docxfill.fill(template, resolve)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    name = f"{_safe_name(str(tpl.get('name') or 'plantilla'))}_{_safe_name(path.stem, 40)}_fila{row}_{now:%Y%m%d-%H%M%S}.docx"
+    target = out_dir / name
+    target.write_bytes(out)
+    return target
+
+
 class LocalApi:
     def __init__(self, *, port: int, origins: tuple[str, ...], version: str,
                  lookup: Callable[[str], Optional[tuple[dict, Path]]],
                  max_bytes: int = 50 * 1024 * 1024,
                  folder_opener: Callable[[Path], None] = open_folder,
-                 file_opener: Callable[[Path], None] = open_file) -> None:
+                 file_opener: Callable[[Path], None] = open_file,
+                 template_loader: Optional[Callable[[str], Optional[dict]]] = None,
+                 fill_dir: Optional[Path] = None) -> None:
         self.origins = {o.rstrip("/") for o in origins}
         self.version = version
         self.lookup = lookup
         self.max_bytes = max_bytes
         self.folder_opener = folder_opener
         self.file_opener = file_opener
+        self.template_loader = template_loader
+        self.fill_dir = fill_dir
         api = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -169,14 +217,20 @@ class LocalApi:
                 origin = self._guard()
                 if origin is None:
                     return
-                if urlparse(self.path).path != "/v1/open":
+                route = urlparse(self.path).path
+                if route not in ("/v1/open", "/v1/fill"):
                     self._send(404, {"error": "not_found"}, origin)
                     return
                 try:
                     length = min(int(self.headers.get("Content-Length") or 0), 2048)
                     body = json.loads(self.rfile.read(length) or b"{}")
+                    if not isinstance(body, dict):
+                        raise ValueError
                 except (ValueError, UnicodeDecodeError):
                     self._send(400, {"error": "bad_request"}, origin)
+                    return
+                if route == "/v1/fill":
+                    self._fill(body, origin)
                     return
                 fid, what = str(body.get("file", "")), body.get("what")
                 found = api.lookup(fid) if _UUID.match(fid) else None
@@ -190,6 +244,64 @@ class LocalApi:
                     self._send(501, {"error": "unsupported"}, origin)
                     return
                 self._send(200, {"ok": True}, origin)
+
+            def _fill(self, body: dict, origin: str) -> None:
+                """Rellena la plantilla con la fila indicada y abre el documento. Todo en este ordenador."""
+                fid, tid = str(body.get("file", "")), str(body.get("template", ""))
+                sheet = str(body.get("sheet") or "")[:200] or None
+                row = body.get("row")
+                if not (_UUID.match(fid) and _UUID.match(tid)) or not isinstance(row, int) or isinstance(row, bool) or not 1 <= row <= 2_000_000:
+                    self._send(400, {"error": "bad_request"}, origin)
+                    return
+                found = api.lookup(fid)
+                if not found:
+                    self._send(404, {"error": "not_found"}, origin)  # este archivo no está en este PC
+                    return
+                if api.template_loader is None or api.fill_dir is None:
+                    self._send(501, {"error": "unsupported"}, origin)
+                    return
+                cfg, path = found
+                try:
+                    tpl = api.template_loader(tid)
+                except Exception:  # sin red / token: no se registra el detalle
+                    self._send(502, {"error": "template_unavailable"}, origin)
+                    return
+                if not tpl:
+                    self._send(404, {"error": "template_not_found"}, origin)
+                    return
+                try:
+                    if path.stat().st_size > api.max_bytes:
+                        self._send(413, {"error": "too_big"}, origin)
+                        return
+                    data = path.read_bytes()
+                except OSError:
+                    self._send(423, {"error": "busy"}, origin)
+                    return
+                try:
+                    result = fill_from_row(data, path, cfg, sheet, row, tpl, api.fill_dir)
+                except FillError as e:
+                    self._send(e.status, {"error": e.code}, origin)
+                    return
+                except readers.ReadError:
+                    self._send(422, {"error": "unreadable"}, origin)
+                    return
+                except docxfill.TemplateError:
+                    self._send(422, {"error": "bad_template"}, origin)
+                    return
+                except OSError:
+                    self._send(500, {"error": "cannot_write"}, origin)
+                    return
+                except Exception as e:  # nunca registrar el mensaje: podría citar datos
+                    log.error("Error al rellenar la plantilla: %s", type(e).__name__)
+                    self._send(500, {"error": "error"}, origin)
+                    return
+                finally:
+                    data = b""
+                try:
+                    api.file_opener(result)
+                except OSError:
+                    pass  # el documento ya está guardado; solo no se pudo abrir solo
+                self._send(200, {"ok": True, "name": result.name}, origin)
 
             def _preview(self, q: dict, origin: str) -> None:
                 fid = (q.get("file") or [""])[0]

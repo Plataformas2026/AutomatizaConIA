@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getSessionContext } from '@/lib/auth';
 import { AlertsList } from '@/components/AlertsList';
 import type { AlertRow } from '@/components/AlertsProvider';
+import { identifiers } from '@/lib/assign/assign';
 
 export default async function AlertsPage() {
   const ctx = await getSessionContext();
@@ -12,13 +13,16 @@ export default async function AlertsPage() {
     ctx.supabase
       .from('alerts')
       .select(
-        'id, company_id, project_id, file_name, rule_name, sheet_name, message, severity, matched_count, row_refs, status, created_at',
+        'id, company_id, project_id, file_id, rule_id, template_id, assignees, file_name, rule_name, sheet_name, message, severity, matched_count, row_refs, status, created_at',
       )
       .neq('status', 'dismissed')
       .order('created_at', { ascending: false })
       .limit(150),
     ctx.supabase.from('projects').select('id, name, company_id').order('created_at', { ascending: true }),
   ]);
+  // Nombres por los que se reconoce a esta persona en las columnas de reparto (los pone el administrador).
+  const { data: aliasRows } = await ctx.supabase.from('user_aliases').select('alias');
+  const me = identifiers(ctx.user.email ?? '', (aliasRows ?? []).map((r) => r.alias as string));
 
   const names = new Map((projects ?? []).map((p) => [p.id as string, p.name as string]));
   const rows: AlertRow[] = (alerts ?? []).map(({ company_id, ...a }) => ({
@@ -39,7 +43,7 @@ export default async function AlertsPage() {
         Cada alerta pertenece al proyecto de su archivo. Las de proyectos que han compartido contigo aparecen aquí
         solo para consultar.
       </p>
-      <AlertsList initial={rows} projects={options} />
+      <AlertsList initial={rows} projects={options} me={me} />
     </>
   );
 }

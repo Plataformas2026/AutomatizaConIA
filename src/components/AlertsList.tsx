@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { myShare, personalize, type MyShare } from '@/lib/assign/assign';
+import { FillDialog } from './alerts/FillDialog';
 import { createClient } from '@/lib/supabase/client';
 import { useAlerts, type AlertRow } from './AlertsProvider';
 import { IconBell, IconCheck, IconFolder, IconTable } from './Icons';
@@ -10,7 +12,10 @@ const SEVERITY_LABEL = { info: 'Informativa', warning: 'Aviso', critical: 'Crít
 export function AlertsList({
   initial,
   projects = [],
+  me = [],
 }: {
+  /** Con qué nombres aparece esta persona en las columnas de reparto (su correo y sus alias). */
+  me?: string[];
   initial: AlertRow[];
   /** Proyectos con alertas (propios y compartidos conmigo), para filtrar. */
   projects?: { id: string; name: string }[];
@@ -19,6 +24,25 @@ export function AlertsList({
   const [filter, setFilter] = useState<string>('all');
   const { adjustUnread, refreshUnread, onNewAlert, unread } = useAlerts();
   const [error, setError] = useState<string | null>(null);
+  const [shares, setShares] = useState<Record<string, MyShare>>({});
+  const [filling, setFilling] = useState<AlertRow | null>(null);
+
+  // «Cuántas me corresponden»: se calcula aquí con tus nombres; en la base de datos solo hay huellas.
+  const meKey = me.join('|');
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const next: Record<string, MyShare> = {};
+      for (const a of alerts) {
+        if (a.rule_id && a.assignees && Object.keys(a.assignees).length) next[a.id] = await myShare(a.assignees, a.rule_id, me);
+      }
+      if (alive) setShares(next);
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alerts, meKey]);
 
   // Las alertas nuevas llegan por la suscripción única del proveedor.
   useEffect(
@@ -114,7 +138,7 @@ export function AlertsList({
               <IconBell size={18} />
             </span>
             <div className="grow">
-              <strong className="alert-msg">{a.message}</strong>
+              <strong className="alert-msg">{shares[a.id] ? personalize(a.message, shares[a.id]) : a.message}</strong>
               <div className="chips">
                 <span className="tag tag-file">
                   <IconTable size={14} />
@@ -129,6 +153,9 @@ export function AlertsList({
                 )}
                 {a.shared && <span className="tag tag-count">Compartida contigo</span>}
                 <span className="tag tag-rule">Regla «{a.rule_name}»</span>
+                {shares[a.id] && shares[a.id].unassigned > 0 && (
+                  <span className="tag tag-count">{shares[a.id].unassigned} sin responsable</span>
+                )}
                 <span className="tag tag-count">
                   {a.matched_count} fila{a.matched_count === 1 ? '' : 's'}
                   {a.row_refs?.length > 0 &&
@@ -140,6 +167,11 @@ export function AlertsList({
               </time>
             </div>
             <div className="alert-actions">
+              {a.template_id && a.file_id && (
+                <button className="btn primary" onClick={() => setFilling(a)}>
+                  Rellenar
+                </button>
+              )}
               {!a.shared && a.status === 'open' && (
                 <button className="btn" onClick={() => setStatus(a, 'read')}>
                   Marcar leída
@@ -154,6 +186,7 @@ export function AlertsList({
           </li>
         ))}
       </ul>
+      {filling && <FillDialog alert={filling} mine={shares[filling.id]?.rows ?? []} onClose={() => setFilling(null)} />}
     </>
   );
 }

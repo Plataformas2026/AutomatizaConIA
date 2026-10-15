@@ -1,0 +1,35 @@
+{
+ "fields": [
+  "Cliente",
+  "Responsable",
+  "importe total",
+  "hoy",
+  "fila",
+  "Observaciones",
+  "Inexistente",
+  "archivo"
+ ],
+ "headers": [
+  "Cliente",
+  "Responsable",
+  "Importe",
+  "Notas"
+ ],
+ "values": {
+  "Cliente": "Acme & Hijos <S.L.>",
+  "Responsable": "Ana López",
+  "Importe": 1500.25,
+  "Notas": "línea 1\nlínea 2"
+ },
+ "mapping": {
+  "importe total": "Importe",
+  "Observaciones": "Notas"
+ },
+ "row": 7,
+ "today": "14/10/2026",
+ "file": "informes.xlsx",
+ "sheet": "Hoja1",
+ "rule": "Completar",
+ "document": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>\n<w:p><w:pPr><w:pStyle w:val=\"Title\"/></w:pPr><w:r><w:t xml:space=\"preserve\">Informe de Acme &amp; Hijos &lt;S.L.&gt;</w:t></w:r></w:p>\n<w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space=\"preserve\">Responsable: Ana López</w:t></w:r><w:r><w:t></w:t></w:r><w:r><w:t></w:t></w:r></w:p>\n<w:p><w:r><w:t>Texto fijo sin campos &amp; con símbolos</w:t></w:r></w:p>\n<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Importe</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t xml:space=\"preserve\">1500,25</w:t></w:r></w:p></w:tc></w:tr></w:tbl>\n<w:p><w:r><w:t xml:space=\"preserve\">Fecha: 14/10/2026 · Fila 7 · Obs: línea 1 línea 2 · Falta: </w:t></w:r></w:p>\n<w:p><w:r><w:t xml:space=\"preserve\">Repetido Acme &amp; Hijos &lt;S.L.&gt;</w:t></w:r></w:p>\n</w:body></w:document>",
+ "header": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><w:hdr xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:p><w:r><w:t xml:space=\"preserve\">Archivo: informes.xlsx</w:t></w:r></w:p></w:hdr>"
+}

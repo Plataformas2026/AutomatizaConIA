@@ -1,3 +1,5 @@
+import { hasTimeOperator } from '@/lib/rules/engine';
+import type { Condition } from '@/lib/rules/types';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { env } from '@/lib/env';
 import { safeEqual } from '@/lib/crypto';
@@ -47,11 +49,23 @@ async function handle(req: Request) {
   let dateChecked = 0;
   const { data: dateRules } = await admin
     .from('rules')
-    .select('file_id')
+    .select('file_id, condition')
     .eq('enabled', true)
-    .in('condition->>operator', ['elapsed', 'on_date'])
-    .limit(500);
-  const dateFileIds = [...new Set((dateRules ?? []).map((r) => r.file_id as string))].slice(0, 50);
+    .limit(2000);
+  // Las condiciones compuestas pueden llevar un operador de fecha dentro de un grupo: se mira el árbol entero.
+  const dateFileIds = [
+    ...new Set(
+      (dateRules ?? [])
+        .filter((r) => {
+          try {
+            return hasTimeOperator(r.condition as Condition);
+          } catch {
+            return false;
+          }
+        })
+        .map((r) => r.file_id as string),
+    ),
+  ].slice(0, 50);
   if (dateFileIds.length) {
     const { data: dateFiles } = await admin
       .from('shared_files_metadata')

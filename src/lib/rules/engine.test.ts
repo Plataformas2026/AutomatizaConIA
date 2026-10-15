@@ -187,3 +187,40 @@ test('countUnreadableDates y pista por nombre de columna', () => {
   assert.equal(looksLikeDates(['pronto', '15/10/2026', 'n/a'], 'Fecha de alta'), true); // 1 de 3 = 33 % basta con pista
   assert.equal(looksLikeDates(['pronto', '15/10/2026', 'n/a'], 'Notas'), false);
 });
+
+/* ── Reglas compuestas (los mismos casos que ejecuta el agente en Python) ── */
+import { conditionColumns, evaluateCondition, hasTimeOperator } from './engine';
+
+const COMPOUND = JSON.parse(readFileSync(new URL('../../../agent/tests/compound_cases.json', import.meta.url), 'utf8')) as {
+  cases: { name: string; condition: Condition; today?: string; rows: { n: number; v: Record<string, unknown> }[]; expected: number[] }[];
+  valid: unknown[];
+  invalid: unknown[];
+};
+
+test('condiciones compuestas: casos compartidos con el agente', () => {
+  for (const c of COMPOUND.cases) {
+    const parsed = conditionSchema.safeParse(c.condition);
+    assert.ok(parsed.success, c.name);
+    const today = c.today ? Math.floor(Date.parse(`${c.today}T00:00:00Z`) / 86_400_000) : undefined;
+    const headers = [...new Set(c.rows.flatMap((r) => Object.keys(r.v)))];
+    const table = { headers, rows: c.rows.map((r) => ({ rowNumber: r.n, values: r.v })) };
+    const ev = evaluateRule({ id: 'r', condition: c.condition }, table as never, { today });
+    assert.equal(ev.error, undefined, c.name);
+    assert.deepEqual(ev.matchedRows, c.expected, c.name);
+  }
+});
+
+test('condiciones compuestas: válidas e inválidas coinciden con el agente', () => {
+  for (const c of COMPOUND.valid) assert.ok(conditionSchema.safeParse(c).success, JSON.stringify(c));
+  for (const c of COMPOUND.invalid) assert.ok(!conditionSchema.safeParse(c).success, JSON.stringify(c));
+});
+
+test('condiciones compuestas: columnas, día de hoy y columna que falta en una rama', () => {
+  const dated = COMPOUND.cases[6].condition;
+  assert.deepEqual(conditionColumns(dated), ['f', 'done']);
+  assert.equal(hasTimeOperator(dated), true);
+  assert.equal(hasTimeOperator(COMPOUND.cases[0].condition), false);
+  const ev = evaluateRule({ id: 'r', condition: COMPOUND.cases[0].condition }, { headers: ['X'], rows: [] } as never);
+  assert.match(ev.error ?? '', /«H»/);
+  assert.equal(evaluateCondition(COMPOUND.cases[0].condition, { X: 'y', H: '' }), true);
+});

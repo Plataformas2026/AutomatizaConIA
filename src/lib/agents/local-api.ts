@@ -18,7 +18,9 @@ export interface PreviewData {
   truncated: boolean;
 }
 
-export type LocalErrorCode = 'unreachable' | 'forbidden' | 'not_found' | 'busy' | 'unreadable' | 'too_big' | 'unsupported' | 'error';
+export type LocalErrorCode =
+  | 'unreachable' | 'forbidden' | 'not_found' | 'busy' | 'unreadable' | 'too_big' | 'unsupported' | 'error'
+  | 'template_not_found' | 'row_not_found' | 'sheet_not_found' | 'bad_template' | 'template_unavailable' | 'cannot_write';
 
 export class LocalAgentError extends Error {
   constructor(public code: LocalErrorCode) {
@@ -37,7 +39,14 @@ export const LOCAL_ERROR_TEXT: Record<LocalErrorCode, string> = {
   too_big: 'El archivo es demasiado grande para la vista previa.',
   unsupported: 'Esta acción solo está disponible en Windows.',
   error: 'El agente no pudo completar la acción.',
+  template_not_found: 'El agente no encuentra la plantilla. Puede que el administrador la haya borrado.',
+  row_not_found: 'Esa fila ya no existe en el archivo (puede haberse movido o borrado). Espera a la próxima comprobación.',
+  sheet_not_found: 'La hoja de esta alerta ya no existe en el archivo.',
+  bad_template: 'La plantilla no se puede abrir como documento Word. Avisa al administrador.',
+  template_unavailable: 'El agente no pudo descargar la plantilla (¿sin conexión?). Inténtalo de nuevo.',
+  cannot_write: 'El agente no pudo guardar el documento. Revisa FILL_DIR en su archivo .env o los permisos de la carpeta.',
 };
+
 
 const BY_STATUS: Record<number, LocalErrorCode> = {
   403: 'forbidden',
@@ -60,7 +69,11 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   } catch {
     throw new LocalAgentError('unreachable');
   }
-  if (!res.ok) throw new LocalAgentError(BY_STATUS[res.status] ?? 'error');
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    const named = body.error && body.error in LOCAL_ERROR_TEXT ? (body.error as LocalErrorCode) : null;
+    throw new LocalAgentError(named ?? BY_STATUS[res.status] ?? 'error');
+  }
   return (await res.json()) as T;
 }
 
@@ -76,5 +89,14 @@ export function localOpen(fileId: string, what: 'folder' | 'file'): Promise<{ ok
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ file: fileId, what }),
+  });
+}
+
+/** Pide al agente de ESTE ordenador que rellene la plantilla con una fila del archivo y abra el documento. */
+export function localFill(fileId: string, templateId: string, sheet: string | null, row: number): Promise<{ ok: true; name: string }> {
+  return call('/v1/fill', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file: fileId, template: templateId, sheet: sheet ?? '', row }),
   });
 }

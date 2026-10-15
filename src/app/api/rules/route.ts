@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getSessionContext } from '@/lib/auth';
 import { audit, dbForResource } from '@/lib/admin';
 import { createRuleSchema } from '@/lib/rules/types';
+import { templatesBelong } from '@/lib/templates/check';
 import { processFile } from '@/lib/pipeline/process-file';
 
 export const dynamic = 'force-dynamic';
@@ -26,6 +27,10 @@ export async function POST(req: Request) {
   if (!ctx.isAdmin) fileQuery = fileQuery.eq('company_id', ctx.companyId);
   const { data: file } = await fileQuery.maybeSingle();
   if (!file) return NextResponse.json({ error: 'file_not_found' }, { status: 404 });
+
+  if (!(await templatesBelong(db, file.company_id as string, actions))) {
+    return NextResponse.json({ error: 'template_not_found' }, { status: 400 });
+  }
 
   const { data: rule, error } = await db
     .from('rules')

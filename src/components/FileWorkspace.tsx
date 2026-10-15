@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { SheetSelection } from '@/lib/parsing/parse';
 import { SheetPicker, isValidSelection } from './SheetPicker';
-import { RulesPanel, type ColumnInfo, type RuleRow } from './RulesPanel';
+import { RulesPanel, type ColumnInfo, type RuleRow, type TemplateOption } from './RulesPanel';
 
 interface Structure {
   sheets: string[];
@@ -33,8 +33,10 @@ export function FileWorkspace({
   isCsv,
   initialRules,
   ownerUserId,
+  templates,
 }: {
   ownerUserId?: string;
+  templates?: TemplateOption[];
   fileId: string;
   fileName: string;
   isCsv: boolean;
@@ -141,6 +143,7 @@ export function FileWorkspace({
 
       <RulesPanel
         ownerUserId={ownerUserId}
+        templates={templates}
         fileId={fileId}
         fileName={fileName}
         initialRules={initialRules}

@@ -4,6 +4,7 @@ import { getSessionContext } from '@/lib/auth';
 import { audit, dbForResource } from '@/lib/admin';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { updateRuleSchema } from '@/lib/rules/types';
+import { templatesBelong } from '@/lib/templates/check';
 import { processFile } from '@/lib/pipeline/process-file';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ruleId
   if (!parsed.success) return NextResponse.json({ error: 'invalid_body' }, { status: 400 });
   const patch = parsed.data;
 
-  const { data: rule, error } = await dbForResource(ctx)
+  const db = dbForResource(ctx);
+  if (patch.actions) {
+    // La regla debe ser visible para quien la modifica (RLS) y las plantillas, de su misma empresa.
+    const { data: current } = await db.from('rules').select('company_id').eq('id', ruleId).maybeSingle();
+    if (!current) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    if (!(await templatesBelong(db, current.company_id as string, patch.actions))) {
+      return NextResponse.json({ error: 'template_not_found' }, { status: 400 });
+    }
+  }
+
+  const { data: rule, error } = await db
     .from('rules')
     .update(patch)
     .eq('id', ruleId)

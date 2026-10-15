@@ -88,3 +88,64 @@ class LocalApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FillTests(unittest.TestCase):
+    TID = "99999999-0000-4000-8000-0123456789ab"
+
+    def setUp(self):
+        import base64
+        self.tmp = tempfile.TemporaryDirectory()
+        self.csv = Path(self.tmp.name) / "informes.csv"
+        self.csv.write_text("Cliente;Responsable;Importe;Notas\nAcme;Ana López;1500,25;ok\nBeta & Co;Luis;20;\n", encoding="utf-8")
+        self.out = Path(self.tmp.name) / "informes_rellenados"
+        tpl = (Path(__file__).parent / "fixtures" / "plantilla.docx").read_bytes()
+        self.template = {"id": self.TID, "name": "Informe mensual", "mapping": {"importe total": "Importe"},
+                         "content_b64": base64.b64encode(tpl).decode()}
+        self.opened = []
+        self.srv = localapi.LocalApi(
+            port=0, origins=(ORIGIN,), version="t",
+            lookup=lambda fid: ({"sheet_mode": "first", "sheet_names": []}, self.csv) if fid == FID else None,
+            file_opener=lambda p: self.opened.append(p),
+            template_loader=lambda tid: self.template if tid == self.TID else None,
+            fill_dir=self.out,
+        )
+        self.srv.start()
+
+    def tearDown(self):
+        self.srv.stop()
+        self.tmp.cleanup()
+
+    def post(self, body, headers=None):
+        return request(self.srv.port, "POST", "/v1/fill", {**(headers or GOOD), "Content-Type": "application/json"}, json.dumps(body))
+
+    def test_fills_and_opens(self):
+        import docxfill
+        status, _, body = self.post({"file": FID, "template": self.TID, "row": 3})
+        self.assertEqual(status, 200)
+        self.assertTrue(body["ok"] and body["name"].endswith(".docx") and "fila3" in body["name"])
+        (written,) = list(self.out.glob("*.docx"))
+        self.assertEqual(self.opened, [written])
+        xml = docxfill.part_xml(written.read_bytes())
+        self.assertIn("Beta &amp; Co", xml)      # {{Cliente}} (escapado)
+        self.assertIn("Luis", xml)               # {{Responsable}}, un campo partido en dos tramos
+        self.assertIn(">20<", xml)               # {{importe total}} vía mapeo
+        self.assertNotIn("{{", xml)
+        self.assertNotIn("Beta", json.dumps(body))  # la respuesta nunca incluye datos de la fila
+
+    def test_guards_and_errors(self):
+        self.assertEqual(self.post({"file": FID, "template": self.TID, "row": 3}, {"X-Automatiza": "1"})[0], 403)
+        self.assertEqual(self.post({"file": FID, "template": self.TID, "row": 3}, {"Origin": "https://malo.com", "X-Automatiza": "1"})[0], 403)
+        self.assertEqual(self.post({"file": FID, "template": self.TID, "row": "3"})[0], 400)
+        self.assertEqual(self.post({"file": FID, "template": "nada", "row": 3})[0], 400)
+        self.assertEqual(self.post({"file": "11111111-0000-4000-8000-0123456789ab", "template": self.TID, "row": 3})[0], 404)
+        self.assertEqual(self.post({"file": FID, "template": "11111111-0000-4000-8000-0123456789ab", "row": 3})[1:][1]["error"], "template_not_found")
+        self.assertEqual(self.post({"file": FID, "template": self.TID, "row": 99})[2]["error"], "row_not_found")
+        self.assertFalse(self.out.exists())  # ningún fallo deja archivos
+
+    def test_name_is_sanitised(self):
+        self.template["name"] = "../../Informe: <mensual>?"
+        self.post({"file": FID, "template": self.TID, "row": 2})
+        (written,) = list(self.out.glob("*.docx"))
+        self.assertEqual(written.parent, self.out)
+        self.assertNotIn("..", written.name)
