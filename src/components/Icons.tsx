@@ -225,3 +225,12 @@ export function IconMail(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconLog(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="4" y="3.5" width="16" height="17" rx="3" />
+      <path d="M8 9h8M8 12.5h8M8 16h5" />
+    </Svg>
+  );
+}

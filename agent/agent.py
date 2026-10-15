@@ -34,8 +34,9 @@ import localapi
 import engine
 import outlook
 import readers
+import remote_log
 
-VERSION = "1.7.0"
+VERSION = "1.8.0"
 LOCK_PORT = 47653  # evita dos agentes a la vez (se libera sola al cerrar)
 log = logging.getLogger("agente")
 
@@ -104,6 +105,9 @@ class Agent:
         self._name_index: Optional[dict[str, list[Path]]] = None
         self._name_index_at = 0.0
         self._offline = False
+        self.remote_log: Optional[remote_log.RemoteLogHandler] = None  # avisos para la pestaña «Logs» de la web
+        self._next_logs = 0.0
+        self._logs_blocked_until = 0.0
         self.stop = threading.Event()
         self.outlook = outlook.OutlookSender(cfg.outlook_account)
 
@@ -445,12 +449,28 @@ class Agent:
         log.info("Vista previa, «abrir carpeta» y «Rellenar» activos en 127.0.0.1:%d para %s", srv.port, ", ".join(self.cfg.web_origins))
         return srv
 
+    def flush_logs(self, force: bool = False) -> None:
+        """Envía a la web los avisos y errores acumulados. Nunca debe molestar al trabajo del agente."""
+        h = self.remote_log
+        now = time.monotonic()
+        if h is None or not h.pending() or (not force and (now < self._next_logs or now < self._logs_blocked_until)):
+            return
+        self._next_logs = now + 15
+        try:
+            while h.pending() and h.flush_to(self.api.report_logs):
+                pass
+        except (ApiUnavailable, TokenError):
+            pass  # sin red o sin token: se reintenta; los registros siguen en cola
+        except ApiError:
+            self._logs_blocked_until = time.monotonic() + 600  # p. ej. falta la migración 0014: no insistir
+
     def run(self) -> int:
         self._start_observer()
         local_srv = self._start_local_api()
         next_poll = 0.0
         next_mail = 0.0
-        log.info("Agente %s en marcha. Carpetas autorizadas: %s", VERSION, "; ".join(str(f) for f in self.cfg.folders))
+        log.info("Agente %s en marcha. Carpetas autorizadas: %s", VERSION, "; ".join(str(f) for f in self.cfg.folders),
+                 extra={"remote": True})
         log.info("Correos: modo «%s»", self.cfg.email_mode)
         try:
             while not self.stop.is_set():
@@ -460,10 +480,11 @@ class Agent:
                         self.refresh()
                         next_poll = now + self.cfg.poll_seconds
                         if self._offline:
-                            log.info("Conexión recuperada.")
+                            log.info("Conexión recuperada.", extra={"remote": True})
                             self._offline = False
                     self._drain_events()
                     self._run_due()
+                    self.flush_logs()
                     if now >= next_mail:
                         next_mail = now + 20
                         self.process_outbox()
@@ -483,6 +504,8 @@ class Agent:
                     next_poll = time.monotonic() + self.cfg.poll_seconds
                 self.stop.wait(0.5)
         finally:
+            log.info("Agente detenido.", extra={"remote": True})
+            self.flush_logs(force=True)
             if local_srv:
                 local_srv.stop()
             if self.observer:
@@ -498,7 +521,7 @@ class Agent:
 
 
 # ── Utilidades de arranque ──────────────────────────────────────────────
-def setup_logging(cfg: Config, verbose: bool) -> None:
+def setup_logging(cfg: Config, verbose: bool) -> remote_log.RemoteLogHandler:
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%Y-%m-%d %H:%M:%S")
     root = logging.getLogger()
     root.setLevel(logging.INFO)
@@ -509,6 +532,7 @@ def setup_logging(cfg: Config, verbose: bool) -> None:
         sh = logging.StreamHandler(sys.stdout)
         sh.setFormatter(fmt)
         root.addHandler(sh)
+    return remote_log.install()
 
 
 def single_instance() -> Optional[socket.socket]:
@@ -582,7 +606,7 @@ def main() -> int:
     except ConfigError as e:
         print(f"Error de configuración: {e}")
         return 1
-    setup_logging(cfg, args.verbose or args.check or args.once)
+    remote = setup_logging(cfg, args.verbose or args.check or args.once)
     api = Api(cfg.supabase_url, cfg.anon_key, cfg.token, VERSION)
 
     if args.check:
@@ -594,13 +618,15 @@ def main() -> int:
         return 0
 
     agent = Agent(cfg, api)
+    agent.remote_log = remote
     try:
         if args.once:
-            return agent.run_once()
+            code = agent.run_once()
+            agent.flush_logs(force=True)
+            return code
         return agent.run()
     except KeyboardInterrupt:
-        log.info("Agente detenido.")
-        return 0
+        return 0  # run() ya registró «Agente detenido.»
     except TokenError:
         log.error("El token del agente no es válido.")
         return 2

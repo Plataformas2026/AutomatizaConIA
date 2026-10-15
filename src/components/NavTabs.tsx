@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAlerts } from './AlertsProvider';
 import { useEmails } from './EmailsProvider';
-import { IconBell, IconChart, IconGrid, IconMail, IconSpark, IconUsers } from './Icons';
+import { IconBell, IconChart, IconGrid, IconLog, IconMail, IconSpark, IconUsers } from './Icons';
 
 /** Barra de pestañas: la sección actual queda marcada con color, subrayado y aria-current. */
 export function NavTabs({ isAdmin = false }: { isAdmin?: boolean }) {
@@ -17,6 +17,7 @@ export function NavTabs({ isAdmin = false }: { isAdmin?: boolean }) {
   const onAlerts = pathname.startsWith('/alerts');
   const onStats = pathname.startsWith('/stats');
   const onModels = pathname.startsWith('/models');
+  const onLogs = pathname.startsWith('/logs');
   const onAdmin = pathname.startsWith('/admin');
   const badge = unread > 99 ? '99+' : `+${unread}`;
   const mailBadge = pending > 99 ? '99+' : `+${pending}`;
@@ -83,6 +84,15 @@ export function NavTabs({ isAdmin = false }: { isAdmin?: boolean }) {
       >
         <IconSpark size={18} />
         Informes y Modelos IA
+      </Link>
+      <Link
+        href="/logs"
+        className={`tab ${onLogs ? 'is-active' : ''}`}
+        style={{ ['--tab-color' as string]: 'var(--critical, #d93a3a)' }}
+        aria-current={onLogs ? 'page' : undefined}
+      >
+        <IconLog size={18} />
+        Logs
       </Link>
       {isAdmin && (
         <Link

@@ -88,6 +88,10 @@ async function handle(req: Request) {
   const { error: purgeError } = await admin.rpc('purge_email_outbox');
   if (purgeError) console.error('[cron/purge-outbox]', purgeError.code ?? 'error');
 
+  // Registros de los agentes: se conservan 14 días.
+  const { error: logsError } = await admin.rpc('purge_agent_logs');
+  if (logsError) console.error('[cron/purge-agent-logs]', logsError.code ?? 'error');
+
   return Response.json({ checked: files?.length ?? 0, renewed, failed, dateChecked });
 }
 

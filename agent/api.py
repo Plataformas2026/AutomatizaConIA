@@ -48,7 +48,7 @@ class Api:
             if res.status_code in (401, 403):
                 raise ApiError("Clave anon rechazada: revisa SUPABASE_ANON_KEY")
             if res.status_code == 404:
-                raise ApiError("Faltan migraciones en Supabase: ejecuta las migraciones 0007, 0008, 0010 y 0012 de supabase/migrations")
+                raise ApiError("Faltan migraciones en Supabase: ejecuta las migraciones 0007, 0008, 0010, 0012 y 0014 de supabase/migrations")
             raise ApiError(msg[:200] or f"HTTP {res.status_code}")
         return res.json() if res.content else None
 
@@ -81,3 +81,7 @@ class Api:
     def report_email(self, email_id: str, status: str, error: Optional[str] = None) -> None:
         """status: 'sent' (enviado), 'drafted' (borrador en Outlook) o 'failed'."""
         self._call("agent_report_email", {"p_id": email_id, "p_status": status, "p_error": error})
+
+    def report_logs(self, entries: list[dict]) -> int:
+        """Avisos y errores del agente para la pestaña «Logs» de la web (texto ya limpiado, sin datos de filas)."""
+        return int(self._call("agent_report_logs", {"p_entries": entries}) or 0)

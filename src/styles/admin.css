@@ -55,3 +55,31 @@
 .alert-more { font-size: 12.5px; color: var(--violet); font-weight: 600; }
 .fill-row-label { display: grid; gap: 2px; min-width: 0; flex: 1 1 200px; }
 .fill-row-label strong { overflow-wrap: anywhere; }
+
+/* ── Logs de los agentes ───────────────────────────────────── */
+.agent-strip { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.agent-pill { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-size: 13.5px; }
+.agent-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); flex: none; }
+.agent-pill.is-silent { border-color: var(--critical); background: var(--critical-soft); }
+.agent-pill.is-silent .agent-dot { background: var(--critical); }
+.logs-bar { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; margin-bottom: 12px; }
+.logs-filters { display: flex; gap: 14px; flex-wrap: wrap; }
+.logs-filters label { display: grid; gap: 4px; }
+.logs-summary { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+.live-dot.on { background: var(--ok); box-shadow: 0 0 0 3px var(--teal-soft); }
+.log-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.log-item { display: flex; gap: 12px; align-items: flex-start; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-left-width: 4px; border-radius: 10px; }
+.log-item.lvl-error { border-left-color: var(--critical); }
+.log-item.lvl-warning { border-left-color: var(--warning); }
+.log-item.lvl-info { border-left-color: var(--info); }
+.log-item.is-new { animation: log-flash 2.4s ease-out 1; }
+@keyframes log-flash { from { background: var(--violet-soft); } to { background: var(--surface); } }
+@media (prefers-reduced-motion: reduce) { .log-item.is-new { animation: none; } }
+.log-level { flex: none; min-width: 58px; text-align: center; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.log-level.lvl-error { background: var(--critical-soft); color: var(--critical-ink); }
+.log-level.lvl-warning { background: var(--warning-soft); color: var(--warning-ink); }
+.log-level.lvl-info { background: var(--info-soft); color: var(--info-ink); }
+.log-main { min-width: 0; flex: 1; }
+.log-msg { margin: 0 0 4px; overflow-wrap: anywhere; line-height: 1.4; }
+.log-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; align-items: center; }

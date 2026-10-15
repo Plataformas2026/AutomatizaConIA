@@ -177,6 +177,8 @@ Además:
 
 Para ver el registro en directo: `iniciar_agente.bat` (con la tarea parada) o abre `agent.log`.
 
+**Pestaña «Logs» de la web (agente 1.8.0+, migración 0014):** los avisos y errores del agente (y «Agente en marcha / detenido / conexión recuperada») se envían también a la web, así no hace falta abrir `agent.log`. Se quitan las direcciones de correo del texto, nunca se envían datos de tus archivos y se conservan 14 días. Si falta la migración 0014 el agente sigue funcionando y solo escribe en `agent.log`.
+
 ## Cambiar la configuración o actualizar
 
 - Cambios en `.env` → reinicia el agente: Programador de tareas → clic derecho en la tarea → **Finalizar** y luego **Ejecutar**.
