@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { localFill, LocalAgentError, LOCAL_ERROR_TEXT } from '@/lib/agents/local-api';
+import { rowLabel } from '@/lib/alerts/rows';
 import type { AlertRow } from '../AlertsProvider';
+import { useAlertRows } from './useAlertRows';
 
 const FILL_ERRORS: Record<string, string> = {
   not_found: 'Esta alerta ya no está disponible.',
@@ -22,6 +24,11 @@ export function FillDialog({ alert, mine, onClose }: { alert: AlertRow; mine: nu
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const rowsState = useAlertRows(alert.id);
+  const labels = new Map<number, string>();
+  if (rowsState.status === 'ok') {
+    for (const r of rowsState.data.rows) labels.set(r.n, rowLabel(rowsState.data.headers, r.cells, r.n));
+  }
 
   useEffect(() => {
     const d = ref.current;
@@ -83,7 +90,13 @@ export function FillDialog({ alert, mine, onClose }: { alert: AlertRow; mine: nu
 
   const row = (n: number) => (
     <li key={n}>
-      <span>Fila {n}</span>
+      <span className="fill-row-label">
+        <strong>{labels.get(n) ?? `Fila ${n}`}</strong>
+        <span className="muted">
+          Fila {n}
+          {rowsState.status === 'loading' && !labels.has(n) ? ' · leyendo datos…' : ''}
+        </span>
+      </span>
       <button type="button" className="btn primary" disabled={busy !== null} onClick={() => void fill(n)}>
         {busy === n ? 'Preparando…' : 'Rellenar'}
       </button>
@@ -97,6 +110,7 @@ export function FillDialog({ alert, mine, onClose }: { alert: AlertRow; mine: nu
         Se abre la plantilla con los datos de la fila ya puestos. Los datos se leen en este momento y no se guardan en ningún
         servidor.
       </p>
+      {rowsState.status === 'error' && <p className="muted">No se pudo leer el contenido de las filas: se muestran solo sus números. {rowsState.message}</p>}
       {mine.length > 0 && (
         <>
           <h3 className="share-h">Te corresponden a ti</h3>

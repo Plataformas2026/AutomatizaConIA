@@ -18,6 +18,29 @@ export interface PreviewData {
   truncated: boolean;
 }
 
+/** Filas concretas de un archivo, ya como texto (detalle de una alerta). */
+export interface RowsData {
+  fileName: string;
+  sheet: string | null;
+  headers: string[];
+  rows: { n: number; cells: string[] }[];
+  /** Filas pedidas que ya no existen en el archivo. */
+  missing: number[];
+  moreColumns: boolean;
+}
+
+/** Tablas del archivo para calcular gráficas en el navegador. Las fechas llegan como {d:'AAAA-MM-DD'}. */
+export interface TablesData {
+  fileName: string;
+  truncated: boolean;
+  sheets: {
+    name: string | null;
+    headers: string[];
+    rows: { n: number; v: unknown[] }[];
+    truncated: boolean;
+  }[];
+}
+
 export type LocalErrorCode =
   | 'unreachable' | 'forbidden' | 'not_found' | 'busy' | 'unreadable' | 'too_big' | 'unsupported' | 'error'
   | 'template_not_found' | 'row_not_found' | 'sheet_not_found' | 'bad_template' | 'template_unavailable' | 'cannot_write';
@@ -64,7 +87,7 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
       ...init,
       cache: 'no-store',
       headers: { 'X-Automatiza': '1', ...(init.headers ?? {}) },
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(60_000),
     });
   } catch {
     throw new LocalAgentError('unreachable');
@@ -99,4 +122,16 @@ export function localFill(fileId: string, templateId: string, sheet: string | nu
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ file: fileId, template: templateId, sheet: sheet ?? '', row }),
   });
+}
+
+/** Contenido de las filas indicadas (las de una alerta). Lectura al vuelo en tu ordenador. */
+export function localRows(fileId: string, sheet: string | null, rows: number[]): Promise<RowsData> {
+  const q = new URLSearchParams({ file: fileId, rows: rows.join(',') });
+  if (sheet) q.set('sheet', sheet);
+  return call<RowsData>(`/v1/rows?${q.toString()}`);
+}
+
+/** Todas las hojas del archivo para «Estadísticas». Los datos van del agente a tu navegador y no se guardan. */
+export function localTables(fileId: string): Promise<TablesData> {
+  return call<TablesData>(`/v1/tables?file=${encodeURIComponent(fileId)}`);
 }

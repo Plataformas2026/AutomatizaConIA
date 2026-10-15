@@ -52,3 +52,33 @@ test('editor: validaciones', () => {
   assert.equal(validateDraft(newLeaf('X', { operator: 'is_not_empty' }), cols), null);
   assert.equal(describeCondition(toCondition(newLeaf('X', { operator: 'is_not_empty' }))), '«X» no está vacío');
 });
+
+test('editor: cadena plana Y/O, «Y» une más fuerte que «O»', () => {
+  const j = (join: 'and' | 'or', l: ReturnType<typeof newLeaf>) => ({ ...l, join });
+  const chain = newGroup('and', []);
+  chain.children = [
+    newLeaf('P', { operator: 'is_empty' }),
+    j('and', newLeaf('Q', { operator: 'is_empty' })),
+    j('or', newLeaf('R', { operator: 'is_empty' })),
+    j('or', newLeaf('S', { operator: 'is_empty' })),
+    j('and', newLeaf('T', { operator: 'is_empty' })),
+  ];
+  const cond = toCondition(chain);
+  assert.equal(
+    describeCondition(cond),
+    '(«P» está vacío y «Q» está vacío) o «R» está vacío o («S» está vacío y «T» está vacío)',
+  );
+  assert.ok(conditionSchema.safeParse(cond).success);
+  // solo Y y solo O
+  const all = (op: 'and' | 'or') => toCondition(newGroup(op, [newLeaf('P'), newLeaf('Q'), newLeaf('R')])) as { op: string; conditions: unknown[] };
+  assert.equal(all('and').op, 'and');
+  assert.equal(all('or').op, 'or');
+  assert.equal(all('or').conditions.length, 3);
+  // ida y vuelta: se vuelve a mostrar como cadena plana, con los mismos conectores
+  const back = fromCondition(cond, ['P', 'Q', 'R', 'S', 'T']);
+  assert.equal(back.kind, 'group');
+  if (back.kind === 'group') {
+    assert.deepEqual(back.children.map((c) => c.join), ['or', 'and', 'or', 'or', 'and']);
+    assert.deepEqual(toCondition(back), cond);
+  }
+});

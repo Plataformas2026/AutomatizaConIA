@@ -144,21 +144,12 @@ function Group({ group, ctx, depth, root, total }: { group: GroupDraft; ctx: Ctx
   const canNest = depth <= MAX_CONDITION_DEPTH;
   const canAdd = total < MAX_CONDITION_LEAVES;
   const first = ctx.columns[0]?.name ?? '';
-  const single = group.children.length <= 1;
+  const hasOr = group.children.some((c, i) => i > 0 && c.join === 'or');
+  const hasAnd = group.children.some((c, i) => i > 0 && c.join === 'and');
   return (
     <div className={`cond-group ${root ? 'is-root' : ''}`} role="group" aria-label={root ? 'Condiciones de la regla' : 'Grupo de condiciones'}>
       <div className="cond-head">
-        {single ? (
-          <span className="field-title">{root ? 'La regla avisa cuando se cumple…' : 'Grupo'}</span>
-        ) : (
-          <label className="cond-join">
-            <span className="field-title">{root ? 'La regla avisa cuando se cumplan' : 'Dentro de este grupo, se cumplan'}</span>
-            <select value={group.op} onChange={(e) => ctx.update(group.id, { op: e.target.value as 'and' | 'or' })}>
-              <option value="and">TODAS estas condiciones (y)</option>
-              <option value="or">ALGUNA de estas condiciones (o)</option>
-            </select>
-          </label>
-        )}
+        <span className="field-title">{root ? 'La regla avisa cuando se cumple…' : 'Grupo (entre paréntesis)'}</span>
         {!root && (
           <button type="button" className="btn ghost-line" onClick={() => ctx.remove(group.id)}>
             Quitar grupo
@@ -168,7 +159,17 @@ function Group({ group, ctx, depth, root, total }: { group: GroupDraft; ctx: Ctx
       <ul className="cond-list">
         {group.children.map((k, i) => (
           <li key={k.id}>
-            {i > 0 && <span className="cond-op" aria-hidden="true">{group.op === 'and' ? 'Y' : 'O'}</span>}
+            {i > 0 && (
+              <select
+                className={`cond-op cond-op-${k.join}`}
+                value={k.join}
+                aria-label={`Unir con la condición anterior (${i} y ${i + 1})`}
+                onChange={(e) => ctx.update(k.id, { join: e.target.value as 'and' | 'or' })}
+              >
+                <option value="and">Y (además, también debe cumplirse)</option>
+                <option value="or">O (o bien, basta con esta)</option>
+              </select>
+            )}
             {k.kind === 'leaf' ? (
               <Leaf leaf={k} ctx={ctx} canRemove={group.children.length > 1 || !root} />
             ) : (
@@ -177,13 +178,18 @@ function Group({ group, ctx, depth, root, total }: { group: GroupDraft; ctx: Ctx
           </li>
         ))}
       </ul>
+      {hasOr && hasAnd && (
+        <p className="muted cond-hint">
+          «Y» se aplica antes que «O»: <em>A y B o C</em> significa «(A y B) o C». Si necesitas otro orden, usa «Añadir grupo».
+        </p>
+      )}
       <div className="cond-add">
         <button type="button" className="btn" disabled={!canAdd} onClick={() => ctx.add(group.id, newLeaf(first, { operator: 'eq', rightColumn: ctx.columns[1]?.name ?? first }))}>
           + Añadir condición
         </button>
         {canNest && (
-          <button type="button" className="btn" disabled={!canAdd} onClick={() => ctx.add(group.id, newGroup(group.op === 'and' ? 'or' : 'and', [newLeaf(first)]))}>
-            + Añadir grupo ({group.op === 'and' ? 'alguna de…' : 'todas las de…'})
+          <button type="button" className="btn" disabled={!canAdd} onClick={() => ctx.add(group.id, newGroup('and', [newLeaf(first)]))}>
+            + Añadir grupo (paréntesis)
           </button>
         )}
         {!canAdd && <span className="muted">Máximo {MAX_CONDITION_LEAVES} condiciones.</span>}

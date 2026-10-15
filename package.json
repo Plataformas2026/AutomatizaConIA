@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/rules/engine.test.ts src/lib/assign/assign.test.ts src/lib/rules/draft.test.ts src/lib/templates/docx.test.ts src/lib/parsing/parse.test.ts src/lib/stats/compute.test.ts src/lib/ml/ml.test.ts src/lib/email/render.test.ts"
+    "test": "tsx --test src/lib/rules/engine.test.ts src/lib/assign/assign.test.ts src/lib/rules/draft.test.ts src/lib/stats/local.test.ts src/lib/templates/docx.test.ts src/lib/parsing/parse.test.ts src/lib/stats/compute.test.ts src/lib/ml/ml.test.ts src/lib/email/render.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

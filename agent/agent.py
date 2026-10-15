@@ -35,7 +35,7 @@ import engine
 import outlook
 import readers
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 LOCK_PORT = 47653  # evita dos agentes a la vez (se libera sola al cerrar)
 log = logging.getLogger("agente")
 

@@ -1,883 +1,1031 @@
 {
- "cases": [
-  {
-   "name": "Ejemplo A",
-   "condition": {
-    "kind": "group",
-    "op": "and",
-    "conditions": [
-     {
-      "kind": "compare",
-      "left": {
-       "type": "column",
-       "column": "X"
-      },
-      "operator": "eq",
-      "right": {
-       "type": "value",
-       "value": "y"
-      }
-     },
-     {
-      "kind": "group",
-      "op": "or",
-      "conditions": [
-       {
-        "kind": "compare",
-        "left": {
-         "type": "column",
-         "column": "H"
-        },
-        "operator": "is_empty"
-       },
-       {
-        "kind": "compare",
-        "left": {
-         "type": "column",
-         "column": "H"
-        },
-        "operator": "contains",
-        "right": {
-         "type": "value",
-         "value": "K"
-        }
-       }
-      ]
-     }
-    ]
-   },
-   "rows": [
+  "cases": [
     {
-     "n": 2,
-     "v": {
-      "X": "y",
-      "H": null
-     }
-    },
-    {
-     "n": 3,
-     "v": {
-      "X": "Y",
-      "H": "  "
-     }
-    },
-    {
-     "n": 4,
-     "v": {
-      "X": "y",
-      "H": "Marta K"
-     }
-    },
-    {
-     "n": 5,
-     "v": {
-      "X": "y",
-      "H": "Luis"
-     }
-    },
-    {
-     "n": 6,
-     "v": {
-      "X": "n",
-      "H": null
-     }
-    },
-    {
-     "n": 7,
-     "v": {
-      "X": "y",
-      "H": "kiko"
-     }
-    }
-   ],
-   "expected": [
-    2,
-    3,
-    4,
-    7
-   ]
-  },
-  {
-   "name": "Ejemplo B",
-   "condition": {
-    "kind": "group",
-    "op": "and",
-    "conditions": [
-     {
-      "kind": "compare",
-      "left": {
-       "type": "column",
-       "column": "X"
-      },
-      "operator": "is_not_empty"
-     },
-     {
-      "kind": "group",
-      "op": "or",
-      "conditions": [
-       {
-        "kind": "compare",
-        "left": {
-         "type": "column",
-         "column": "Y"
-        },
-        "operator": "is_empty"
-       },
-       {
-        "kind": "compare",
-        "left": {
-         "type": "column",
-         "column": "Y"
-        },
-        "operator": "eq",
-        "right": {
-         "type": "value",
-         "value": "y"
-        }
-       }
-      ]
-     }
-    ]
-   },
-   "rows": [
-    {
-     "n": 2,
-     "v": {
-      "X": "Informe 1",
-      "Y": null
-     }
-    },
-    {
-     "n": 3,
-     "v": {
-      "X": 45000,
-      "Y": "y"
-     }
-    },
-    {
-     "n": 4,
-     "v": {
-      "X": "2026-01-02",
-      "Y": "hecho"
-     }
-    },
-    {
-     "n": 5,
-     "v": {
-      "X": null,
-      "Y": null
-     }
-    },
-    {
-     "n": 6,
-     "v": {
-      "X": "a",
-      "Y": ""
-     }
-    }
-   ],
-   "expected": [
-    2,
-    3,
-    6
-   ]
-  },
-  {
-   "name": "OR simple",
-   "condition": {
-    "kind": "group",
-    "op": "or",
-    "conditions": [
-     {
-      "kind": "compare",
-      "left": {
-       "type": "column",
-       "column": "a"
-      },
-      "operator": "gt",
-      "right": {
-       "type": "value",
-       "value": 3
-      }
-     },
-     {
-      "kind": "compare",
-      "left": {
-       "type": "column",
-       "column": "b"
-      },
-      "operator": "gt",
-      "right": {
-       "type": "value",
-       "value": 5
-      }
-     }
-    ]
-   },
-   "rows": [
-    {
-     "n": 2,
-     "v": {
-      "a": 1,
-      "b": 9
-     }
-    },
-    {
-     "n": 3,
-     "v": {
-      "a": 5,
-      "b": 1
-     }
-    },
-    {
-     "n": 4,
-     "v": {
-      "a": 5,
-      "b": 9
-     }
-    }
-   ],
-   "expected": [
-    2,
-    3,
-    4
-   ]
-  },
-  {
-   "name": "AND simple",
-   "condition": {
-    "kind": "group",
-    "op": "and",
-    "conditions": [
-     {
-      "kind": "compare",
-      "left": {
-       "type": "column",
-       "column": "a"
-      },
-      "operator": "gt",
-      "right": {
-       "type": "value",
-       "value": 3
-      }
-     },
-     {
-      "kind": "compare",
-      "left": {
-       "type": "column",
-       "column": "b"
-      },
-      "operator": "gt",
-      "right": {
-       "type": "value",
-       "value": 5
-      }
-     }
-    ]
-   },
-   "rows": [
-    {
-     "n": 2,
-     "v": {
-      "a": 1,
-      "b": 9
-     }
-    },
-    {
-     "n": 3,
-     "v": {
-      "a": 5,
-      "b": 1
-     }
-    },
-    {
-     "n": 4,
-     "v": {
-      "a": 5,
-      "b": 9
-     }
-    }
-   ],
-   "expected": [
-    4
-   ]
-  },
-  {
-   "name": "Grupo de una sola condición",
-   "condition": {
-    "kind": "group",
-    "op": "and",
-    "conditions": [
-     {
-      "kind": "compare",
-      "left": {
-       "type": "column",
-       "column": "a"
-      },
-      "operator": "eq",
-      "right": {
-       "type": "value",
-       "value": 1
-      }
-     }
-    ]
-   },
-   "rows": [
-    {
-     "n": 2,
-     "v": {
-      "a": 1,
-      "b": 9
-     }
-    },
-    {
-     "n": 3,
-     "v": {
-      "a": 5,
-      "b": 1
-     }
-    },
-    {
-     "n": 4,
-     "v": {
-      "a": 5,
-      "b": 9
-     }
-    }
-   ],
-   "expected": [
-    2
-   ]
-  },
-  {
-   "name": "Condición simple (compatibilidad)",
-   "condition": {
-    "kind": "compare",
-    "left": {
-     "type": "column",
-     "column": "a"
-    },
-    "operator": "lt",
-    "right": {
-     "type": "value",
-     "value": 5
-    }
-   },
-   "rows": [
-    {
-     "n": 2,
-     "v": {
-      "a": 1,
-      "b": 9
-     }
-    },
-    {
-     "n": 3,
-     "v": {
-      "a": 5,
-      "b": 1
-     }
-    },
-    {
-     "n": 4,
-     "v": {
-      "a": 5,
-      "b": 9
-     }
-    }
-   ],
-   "expected": [
-    2
-   ]
-  },
-  {
-   "name": "Fechas dentro de un grupo",
-   "condition": {
-    "kind": "group",
-    "op": "and",
-    "conditions": [
-     {
-      "kind": "compare",
-      "left": {
-       "type": "column",
-       "column": "f"
-      },
-      "operator": "elapsed",
-      "right": {
-       "type": "value",
-       "value": 6
-      },
-      "unit": "months"
-     },
-     {
-      "kind": "compare",
-      "left": {
-       "type": "column",
-       "column": "done"
-      },
-      "operator": "is_empty"
-     }
-    ]
-   },
-   "today": "2026-10-14",
-   "rows": [
-    {
-     "n": 2,
-     "v": {
-      "f": "14/04/2026",
-      "done": null
-     }
-    },
-    {
-     "n": 3,
-     "v": {
-      "f": "15/04/2026",
-      "done": null
-     }
-    },
-    {
-     "n": 4,
-     "v": {
-      "f": "01/01/2026",
-      "done": "x"
-     }
-    }
-   ],
-   "expected": [
-    2
-   ]
-  },
-  {
-   "name": "Columna a columna",
-   "condition": {
-    "kind": "group",
-    "op": "or",
-    "conditions": [
-     {
-      "kind": "compare",
-      "left": {
-       "type": "column",
-       "column": "a"
-      },
-      "operator": "eq",
-      "right": {
-       "type": "column",
-       "column": "b"
-      }
-     }
-    ]
-   },
-   "rows": [
-    {
-     "n": 2,
-     "v": {
-      "a": "x",
-      "b": "X"
-     }
-    },
-    {
-     "n": 3,
-     "v": {
-      "a": "x",
-      "b": "z"
-     }
-    }
-   ],
-   "expected": [
-    2
-   ]
-  }
- ],
- "valid": [
-  {
-   "kind": "group",
-   "op": "and",
-   "conditions": [
-    {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "X"
-     },
-     "operator": "eq",
-     "right": {
-      "type": "value",
-      "value": "y"
-     }
-    },
-    {
-     "kind": "group",
-     "op": "or",
-     "conditions": [
-      {
-       "kind": "compare",
-       "left": {
-        "type": "column",
-        "column": "H"
-       },
-       "operator": "is_empty"
-      },
-      {
-       "kind": "compare",
-       "left": {
-        "type": "column",
-        "column": "H"
-       },
-       "operator": "contains",
-       "right": {
-        "type": "value",
-        "value": "K"
-       }
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "kind": "group",
-   "op": "and",
-   "conditions": [
-    {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "X"
-     },
-     "operator": "is_not_empty"
-    },
-    {
-     "kind": "group",
-     "op": "or",
-     "conditions": [
-      {
-       "kind": "compare",
-       "left": {
-        "type": "column",
-        "column": "Y"
-       },
-       "operator": "is_empty"
-      },
-      {
-       "kind": "compare",
-       "left": {
-        "type": "column",
-        "column": "Y"
-       },
-       "operator": "eq",
-       "right": {
-        "type": "value",
-        "value": "y"
-       }
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "kind": "compare",
-   "left": {
-    "type": "column",
-    "column": "a"
-   },
-   "operator": "eq",
-   "right": {
-    "type": "value",
-    "value": 1
-   }
-  },
-  {
-   "kind": "group",
-   "op": "and",
-   "conditions": [
-    {
-     "kind": "group",
-     "op": "or",
-     "conditions": [
-      {
-       "kind": "group",
-       "op": "and",
-       "conditions": [
-        {
-         "kind": "compare",
-         "left": {
-          "type": "column",
-          "column": "a"
-         },
-         "operator": "eq",
-         "right": {
-          "type": "value",
-          "value": 1
-         }
-        }
-       ]
-      }
-     ]
-    }
-   ]
-  }
- ],
- "invalid": [
-  {
-   "kind": "group",
-   "op": "xor",
-   "conditions": [
-    {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "a"
-     },
-     "operator": "eq",
-     "right": {
-      "type": "value",
-      "value": 1
-     }
-    }
-   ]
-  },
-  {
-   "kind": "group",
-   "op": "and",
-   "conditions": []
-  },
-  {
-   "kind": "group",
-   "op": "and"
-  },
-  {
-   "kind": "group",
-   "op": "and",
-   "conditions": [
-    {
-     "kind": "compare",
-     "operator": "eq"
-    }
-   ]
-  },
-  {
-   "kind": "other"
-  },
-  {
-   "kind": "group",
-   "op": "and",
-   "conditions": [
-    {
-     "kind": "group",
-     "op": "and",
-     "conditions": [
-      {
-       "kind": "group",
-       "op": "and",
-       "conditions": [
-        {
-         "kind": "group",
-         "op": "and",
-         "conditions": [
+      "name": "Ejemplo A",
+      "condition": {
+        "kind": "group",
+        "op": "and",
+        "conditions": [
           {
-           "kind": "group",
-           "op": "and",
-           "conditions": [
-            {
-             "kind": "compare",
-             "left": {
+            "kind": "compare",
+            "left": {
+              "type": "column",
+              "column": "X"
+            },
+            "operator": "eq",
+            "right": {
+              "type": "value",
+              "value": "y"
+            }
+          },
+          {
+            "kind": "group",
+            "op": "or",
+            "conditions": [
+              {
+                "kind": "compare",
+                "left": {
+                  "type": "column",
+                  "column": "H"
+                },
+                "operator": "is_empty"
+              },
+              {
+                "kind": "compare",
+                "left": {
+                  "type": "column",
+                  "column": "H"
+                },
+                "operator": "contains",
+                "right": {
+                  "type": "value",
+                  "value": "K"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "rows": [
+        {
+          "n": 2,
+          "v": {
+            "X": "y",
+            "H": null
+          }
+        },
+        {
+          "n": 3,
+          "v": {
+            "X": "Y",
+            "H": "  "
+          }
+        },
+        {
+          "n": 4,
+          "v": {
+            "X": "y",
+            "H": "Marta K"
+          }
+        },
+        {
+          "n": 5,
+          "v": {
+            "X": "y",
+            "H": "Luis"
+          }
+        },
+        {
+          "n": 6,
+          "v": {
+            "X": "n",
+            "H": null
+          }
+        },
+        {
+          "n": 7,
+          "v": {
+            "X": "y",
+            "H": "kiko"
+          }
+        }
+      ],
+      "expected": [
+        2,
+        3,
+        4,
+        7
+      ]
+    },
+    {
+      "name": "Ejemplo B",
+      "condition": {
+        "kind": "group",
+        "op": "and",
+        "conditions": [
+          {
+            "kind": "compare",
+            "left": {
+              "type": "column",
+              "column": "X"
+            },
+            "operator": "is_not_empty"
+          },
+          {
+            "kind": "group",
+            "op": "or",
+            "conditions": [
+              {
+                "kind": "compare",
+                "left": {
+                  "type": "column",
+                  "column": "Y"
+                },
+                "operator": "is_empty"
+              },
+              {
+                "kind": "compare",
+                "left": {
+                  "type": "column",
+                  "column": "Y"
+                },
+                "operator": "eq",
+                "right": {
+                  "type": "value",
+                  "value": "y"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "rows": [
+        {
+          "n": 2,
+          "v": {
+            "X": "Informe 1",
+            "Y": null
+          }
+        },
+        {
+          "n": 3,
+          "v": {
+            "X": 45000,
+            "Y": "y"
+          }
+        },
+        {
+          "n": 4,
+          "v": {
+            "X": "2026-01-02",
+            "Y": "hecho"
+          }
+        },
+        {
+          "n": 5,
+          "v": {
+            "X": null,
+            "Y": null
+          }
+        },
+        {
+          "n": 6,
+          "v": {
+            "X": "a",
+            "Y": ""
+          }
+        }
+      ],
+      "expected": [
+        2,
+        3,
+        6
+      ]
+    },
+    {
+      "name": "OR simple",
+      "condition": {
+        "kind": "group",
+        "op": "or",
+        "conditions": [
+          {
+            "kind": "compare",
+            "left": {
               "type": "column",
               "column": "a"
-             },
-             "operator": "eq",
-             "right": {
+            },
+            "operator": "gt",
+            "right": {
+              "type": "value",
+              "value": 3
+            }
+          },
+          {
+            "kind": "compare",
+            "left": {
+              "type": "column",
+              "column": "b"
+            },
+            "operator": "gt",
+            "right": {
+              "type": "value",
+              "value": 5
+            }
+          }
+        ]
+      },
+      "rows": [
+        {
+          "n": 2,
+          "v": {
+            "a": 1,
+            "b": 9
+          }
+        },
+        {
+          "n": 3,
+          "v": {
+            "a": 5,
+            "b": 1
+          }
+        },
+        {
+          "n": 4,
+          "v": {
+            "a": 5,
+            "b": 9
+          }
+        }
+      ],
+      "expected": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "name": "AND simple",
+      "condition": {
+        "kind": "group",
+        "op": "and",
+        "conditions": [
+          {
+            "kind": "compare",
+            "left": {
+              "type": "column",
+              "column": "a"
+            },
+            "operator": "gt",
+            "right": {
+              "type": "value",
+              "value": 3
+            }
+          },
+          {
+            "kind": "compare",
+            "left": {
+              "type": "column",
+              "column": "b"
+            },
+            "operator": "gt",
+            "right": {
+              "type": "value",
+              "value": 5
+            }
+          }
+        ]
+      },
+      "rows": [
+        {
+          "n": 2,
+          "v": {
+            "a": 1,
+            "b": 9
+          }
+        },
+        {
+          "n": 3,
+          "v": {
+            "a": 5,
+            "b": 1
+          }
+        },
+        {
+          "n": 4,
+          "v": {
+            "a": 5,
+            "b": 9
+          }
+        }
+      ],
+      "expected": [
+        4
+      ]
+    },
+    {
+      "name": "Grupo de una sola condición",
+      "condition": {
+        "kind": "group",
+        "op": "and",
+        "conditions": [
+          {
+            "kind": "compare",
+            "left": {
+              "type": "column",
+              "column": "a"
+            },
+            "operator": "eq",
+            "right": {
               "type": "value",
               "value": 1
-             }
             }
-           ]
           }
-         ]
+        ]
+      },
+      "rows": [
+        {
+          "n": 2,
+          "v": {
+            "a": 1,
+            "b": 9
+          }
+        },
+        {
+          "n": 3,
+          "v": {
+            "a": 5,
+            "b": 1
+          }
+        },
+        {
+          "n": 4,
+          "v": {
+            "a": 5,
+            "b": 9
+          }
         }
-       ]
+      ],
+      "expected": [
+        2
+      ]
+    },
+    {
+      "name": "Condición simple (compatibilidad)",
+      "condition": {
+        "kind": "compare",
+        "left": {
+          "type": "column",
+          "column": "a"
+        },
+        "operator": "lt",
+        "right": {
+          "type": "value",
+          "value": 5
+        }
+      },
+      "rows": [
+        {
+          "n": 2,
+          "v": {
+            "a": 1,
+            "b": 9
+          }
+        },
+        {
+          "n": 3,
+          "v": {
+            "a": 5,
+            "b": 1
+          }
+        },
+        {
+          "n": 4,
+          "v": {
+            "a": 5,
+            "b": 9
+          }
+        }
+      ],
+      "expected": [
+        2
+      ]
+    },
+    {
+      "name": "Fechas dentro de un grupo",
+      "condition": {
+        "kind": "group",
+        "op": "and",
+        "conditions": [
+          {
+            "kind": "compare",
+            "left": {
+              "type": "column",
+              "column": "f"
+            },
+            "operator": "elapsed",
+            "right": {
+              "type": "value",
+              "value": 6
+            },
+            "unit": "months"
+          },
+          {
+            "kind": "compare",
+            "left": {
+              "type": "column",
+              "column": "done"
+            },
+            "operator": "is_empty"
+          }
+        ]
+      },
+      "today": "2026-10-14",
+      "rows": [
+        {
+          "n": 2,
+          "v": {
+            "f": "14/04/2026",
+            "done": null
+          }
+        },
+        {
+          "n": 3,
+          "v": {
+            "f": "15/04/2026",
+            "done": null
+          }
+        },
+        {
+          "n": 4,
+          "v": {
+            "f": "01/01/2026",
+            "done": "x"
+          }
+        }
+      ],
+      "expected": [
+        2
+      ]
+    },
+    {
+      "name": "Columna a columna",
+      "condition": {
+        "kind": "group",
+        "op": "or",
+        "conditions": [
+          {
+            "kind": "compare",
+            "left": {
+              "type": "column",
+              "column": "a"
+            },
+            "operator": "eq",
+            "right": {
+              "type": "column",
+              "column": "b"
+            }
+          }
+        ]
+      },
+      "rows": [
+        {
+          "n": 2,
+          "v": {
+            "a": "x",
+            "b": "X"
+          }
+        },
+        {
+          "n": 3,
+          "v": {
+            "a": "x",
+            "b": "z"
+          }
+        }
+      ],
+      "expected": [
+        2
+      ]
+    },
+    {
+      "name": "Cadena plana: P y Q o R o S y T",
+      "condition": {
+        "kind": "group",
+        "op": "or",
+        "conditions": [
+          {
+            "kind": "group",
+            "op": "and",
+            "conditions": [
+              {
+                "kind": "compare",
+                "left": {
+                  "type": "column",
+                  "column": "P"
+                },
+                "operator": "eq",
+                "right": {
+                  "type": "value",
+                  "value": "1"
+                }
+              },
+              {
+                "kind": "compare",
+                "left": {
+                  "type": "column",
+                  "column": "Q"
+                },
+                "operator": "eq",
+                "right": {
+                  "type": "value",
+                  "value": "1"
+                }
+              }
+            ]
+          },
+          {
+            "kind": "compare",
+            "left": {
+              "type": "column",
+              "column": "R"
+            },
+            "operator": "eq",
+            "right": {
+              "type": "value",
+              "value": "1"
+            }
+          },
+          {
+            "kind": "group",
+            "op": "and",
+            "conditions": [
+              {
+                "kind": "compare",
+                "left": {
+                  "type": "column",
+                  "column": "S"
+                },
+                "operator": "eq",
+                "right": {
+                  "type": "value",
+                  "value": "1"
+                }
+              },
+              {
+                "kind": "compare",
+                "left": {
+                  "type": "column",
+                  "column": "T"
+                },
+                "operator": "eq",
+                "right": {
+                  "type": "value",
+                  "value": "1"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "rows": [
+        {
+          "n": 2,
+          "v": {
+            "P": "1",
+            "Q": "1",
+            "R": "0",
+            "S": "0",
+            "T": "0"
+          }
+        },
+        {
+          "n": 3,
+          "v": {
+            "P": "1",
+            "Q": "0",
+            "R": "0",
+            "S": "0",
+            "T": "0"
+          }
+        },
+        {
+          "n": 4,
+          "v": {
+            "P": "0",
+            "Q": "0",
+            "R": "1",
+            "S": "0",
+            "T": "0"
+          }
+        },
+        {
+          "n": 5,
+          "v": {
+            "P": "0",
+            "Q": "1",
+            "R": "0",
+            "S": "1",
+            "T": "1"
+          }
+        },
+        {
+          "n": 6,
+          "v": {
+            "P": "0",
+            "Q": "0",
+            "R": "0",
+            "S": "1",
+            "T": "0"
+          }
+        },
+        {
+          "n": 7,
+          "v": {
+            "P": "1",
+            "Q": "0",
+            "R": "0",
+            "S": "0",
+            "T": "1"
+          }
+        }
+      ],
+      "expected": [
+        2,
+        4,
+        5
+      ]
+    }
+  ],
+  "valid": [
+    {
+      "kind": "group",
+      "op": "and",
+      "conditions": [
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "X"
+          },
+          "operator": "eq",
+          "right": {
+            "type": "value",
+            "value": "y"
+          }
+        },
+        {
+          "kind": "group",
+          "op": "or",
+          "conditions": [
+            {
+              "kind": "compare",
+              "left": {
+                "type": "column",
+                "column": "H"
+              },
+              "operator": "is_empty"
+            },
+            {
+              "kind": "compare",
+              "left": {
+                "type": "column",
+                "column": "H"
+              },
+              "operator": "contains",
+              "right": {
+                "type": "value",
+                "value": "K"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "group",
+      "op": "and",
+      "conditions": [
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "X"
+          },
+          "operator": "is_not_empty"
+        },
+        {
+          "kind": "group",
+          "op": "or",
+          "conditions": [
+            {
+              "kind": "compare",
+              "left": {
+                "type": "column",
+                "column": "Y"
+              },
+              "operator": "is_empty"
+            },
+            {
+              "kind": "compare",
+              "left": {
+                "type": "column",
+                "column": "Y"
+              },
+              "operator": "eq",
+              "right": {
+                "type": "value",
+                "value": "y"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "compare",
+      "left": {
+        "type": "column",
+        "column": "a"
+      },
+      "operator": "eq",
+      "right": {
+        "type": "value",
+        "value": 1
       }
-     ]
+    },
+    {
+      "kind": "group",
+      "op": "and",
+      "conditions": [
+        {
+          "kind": "group",
+          "op": "or",
+          "conditions": [
+            {
+              "kind": "group",
+              "op": "and",
+              "conditions": [
+                {
+                  "kind": "compare",
+                  "left": {
+                    "type": "column",
+                    "column": "a"
+                  },
+                  "operator": "eq",
+                  "right": {
+                    "type": "value",
+                    "value": 1
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
-   ]
-  },
-  {
-   "kind": "group",
-   "op": "and",
-   "conditions": [
+  ],
+  "invalid": [
     {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "a"
-     },
-     "operator": "eq",
-     "right": {
-      "type": "value",
-      "value": 1
-     }
+      "kind": "group",
+      "op": "xor",
+      "conditions": [
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "a"
+          },
+          "operator": "eq",
+          "right": {
+            "type": "value",
+            "value": 1
+          }
+        }
+      ]
     },
     {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "a"
-     },
-     "operator": "eq",
-     "right": {
-      "type": "value",
-      "value": 1
-     }
+      "kind": "group",
+      "op": "and",
+      "conditions": []
     },
     {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "a"
-     },
-     "operator": "eq",
-     "right": {
-      "type": "value",
-      "value": 1
-     }
+      "kind": "group",
+      "op": "and"
     },
     {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "a"
-     },
-     "operator": "eq",
-     "right": {
-      "type": "value",
-      "value": 1
-     }
+      "kind": "group",
+      "op": "and",
+      "conditions": [
+        {
+          "kind": "compare",
+          "operator": "eq"
+        }
+      ]
     },
     {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "a"
-     },
-     "operator": "eq",
-     "right": {
-      "type": "value",
-      "value": 1
-     }
+      "kind": "other"
     },
     {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "a"
-     },
-     "operator": "eq",
-     "right": {
-      "type": "value",
-      "value": 1
-     }
+      "kind": "group",
+      "op": "and",
+      "conditions": [
+        {
+          "kind": "group",
+          "op": "and",
+          "conditions": [
+            {
+              "kind": "group",
+              "op": "and",
+              "conditions": [
+                {
+                  "kind": "group",
+                  "op": "and",
+                  "conditions": [
+                    {
+                      "kind": "group",
+                      "op": "and",
+                      "conditions": [
+                        {
+                          "kind": "compare",
+                          "left": {
+                            "type": "column",
+                            "column": "a"
+                          },
+                          "operator": "eq",
+                          "right": {
+                            "type": "value",
+                            "value": 1
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
     },
     {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "a"
-     },
-     "operator": "eq",
-     "right": {
-      "type": "value",
-      "value": 1
-     }
+      "kind": "group",
+      "op": "and",
+      "conditions": [
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "a"
+          },
+          "operator": "eq",
+          "right": {
+            "type": "value",
+            "value": 1
+          }
+        },
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "a"
+          },
+          "operator": "eq",
+          "right": {
+            "type": "value",
+            "value": 1
+          }
+        },
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "a"
+          },
+          "operator": "eq",
+          "right": {
+            "type": "value",
+            "value": 1
+          }
+        },
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "a"
+          },
+          "operator": "eq",
+          "right": {
+            "type": "value",
+            "value": 1
+          }
+        },
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "a"
+          },
+          "operator": "eq",
+          "right": {
+            "type": "value",
+            "value": 1
+          }
+        },
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "a"
+          },
+          "operator": "eq",
+          "right": {
+            "type": "value",
+            "value": 1
+          }
+        },
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "a"
+          },
+          "operator": "eq",
+          "right": {
+            "type": "value",
+            "value": 1
+          }
+        },
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "a"
+          },
+          "operator": "eq",
+          "right": {
+            "type": "value",
+            "value": 1
+          }
+        },
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "a"
+          },
+          "operator": "eq",
+          "right": {
+            "type": "value",
+            "value": 1
+          }
+        },
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "a"
+          },
+          "operator": "eq",
+          "right": {
+            "type": "value",
+            "value": 1
+          }
+        },
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "a"
+          },
+          "operator": "eq",
+          "right": {
+            "type": "value",
+            "value": 1
+          }
+        },
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "a"
+          },
+          "operator": "eq",
+          "right": {
+            "type": "value",
+            "value": 1
+          }
+        },
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "a"
+          },
+          "operator": "eq",
+          "right": {
+            "type": "value",
+            "value": 1
+          }
+        }
+      ]
     },
     {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "a"
-     },
-     "operator": "eq",
-     "right": {
-      "type": "value",
-      "value": 1
-     }
-    },
-    {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "a"
-     },
-     "operator": "eq",
-     "right": {
-      "type": "value",
-      "value": 1
-     }
-    },
-    {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "a"
-     },
-     "operator": "eq",
-     "right": {
-      "type": "value",
-      "value": 1
-     }
-    },
-    {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "a"
-     },
-     "operator": "eq",
-     "right": {
-      "type": "value",
-      "value": 1
-     }
-    },
-    {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "a"
-     },
-     "operator": "eq",
-     "right": {
-      "type": "value",
-      "value": 1
-     }
-    },
-    {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "a"
-     },
-     "operator": "eq",
-     "right": {
-      "type": "value",
-      "value": 1
-     }
+      "kind": "group",
+      "op": "and",
+      "conditions": [
+        {
+          "kind": "compare",
+          "left": {
+            "type": "column",
+            "column": "a"
+          },
+          "operator": "elapsed",
+          "right": {
+            "type": "value",
+            "value": -1
+          }
+        }
+      ]
     }
-   ]
-  },
-  {
-   "kind": "group",
-   "op": "and",
-   "conditions": [
-    {
-     "kind": "compare",
-     "left": {
-      "type": "column",
-      "column": "a"
-     },
-     "operator": "elapsed",
-     "right": {
-      "type": "value",
-      "value": -1
-     }
-    }
-   ]
-  }
- ]
+  ]
 }

@@ -1,6 +1,8 @@
 """
 Servidor LOCAL del agente (solo 127.0.0.1): permite que TU navegador, desde el panel web, pida a ESTE agente
-- la vista previa de un archivo (primeras filas), y
+- la vista previa de un archivo (primeras filas),
+- el contenido de las filas que dispararon una alerta (detalle de la alerta),
+- las tablas del archivo para las gráficas de «Estadísticas» (se calculan en tu navegador), y
 - abrir su carpeta o el propio archivo en tu ordenador.
 
 Por qué es seguro y no guarda datos:
@@ -20,7 +22,7 @@ import re
 import subprocess
 import sys
 import threading
-from datetime import datetime
+from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -35,6 +37,9 @@ log = logging.getLogger("agente.local")
 DEFAULT_PORT = 47821  # el mismo valor está en la web (src/lib/agents/local-api.ts)
 PREVIEW_ROWS = 100
 PREVIEW_COLS = 30
+ROWS_MAX = 200          # filas por petición de detalle de alerta
+ROWS_COLS = 40          # columnas que se devuelven en el detalle
+TABLES_MAX_CELLS = 2_000_000  # tope de celdas enviadas al navegador para las gráficas
 CELL_CHARS = 120
 _UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 HEADER = "X-Automatiza"
@@ -86,6 +91,61 @@ def build_preview(data: bytes, path: Path, file_cfg: dict, sheet: Optional[str])
 def _cell(v: Any) -> str:
     s = email_render.format_cell(v)
     return s[:CELL_CHARS]
+
+
+def build_rows(data: bytes, path: Path, file_cfg: dict, sheet: Optional[str], wanted: list[int]) -> dict:
+    """Contenido (como texto) de las filas pedidas. Sirve para el detalle de una alerta: se lee al vuelo."""
+    mode, names = file_cfg.get("sheet_mode") or "first", file_cfg.get("sheet_names") or []
+    wb = readers.read_workbook(data, path.suffix, mode, names)
+    if sheet and sheet in wb.available:
+        wb = readers.read_workbook(data, path.suffix, "selected", [sheet])
+    elif sheet and wb.available and sheet not in wb.available:
+        raise FillError("sheet_not_found", 404)
+    if not wb.sheets:
+        raise FillError("sheet_not_found", 404)
+    chosen = wb.sheets[0]
+    headers = chosen.table.headers[:ROWS_COLS]
+    by_number = {r.number: r for r in chosen.table.rows}
+    rows, missing = [], []
+    for n in wanted:
+        r = by_number.get(n)
+        if r is None:
+            missing.append(n)
+        else:
+            rows.append({"n": n, "cells": [_cell(r.values.get(h)) for h in headers]})
+    return {"fileName": path.name, "sheet": chosen.sheet_name, "headers": headers, "rows": rows,
+            "missing": missing, "moreColumns": len(chosen.table.headers) > ROWS_COLS}
+
+
+def _encode_value(v: Any) -> Any:
+    """Valor de celda → JSON. Las fechas viajan como {"d": "AAAA-MM-DD"}; lo que no es finito, como vacío."""
+    if isinstance(v, datetime):
+        return {"d": v.date().isoformat()}
+    if isinstance(v, date):
+        return {"d": v.isoformat()}
+    if isinstance(v, float) and (v != v or v in (float("inf"), float("-inf"))):
+        return None
+    return v
+
+
+def build_tables(data: bytes, path: Path) -> dict:
+    """Todas las hojas del archivo, para que el navegador calcule las gráficas. Los datos no pasan por ningún servidor."""
+    wb = readers.read_workbook(data, path.suffix, "all", [])
+    budget, truncated, sheets = TABLES_MAX_CELLS, False, []
+    for st in wb.sheets:
+        t = st.table
+        width = max(1, len(t.headers))
+        keep = max(0, min(len(t.rows), budget // width))
+        if keep < len(t.rows):
+            truncated = True
+        budget -= keep * width
+        sheets.append({
+            "name": st.sheet_name,
+            "headers": list(t.headers),
+            "rows": [{"n": r.number, "v": [_encode_value(r.values.get(h)) for h in t.headers]} for r in t.rows[:keep]],
+            "truncated": keep < len(t.rows),
+        })
+    return {"fileName": path.name, "sheets": sheets, "truncated": truncated}
 
 
 class FillError(Exception):
@@ -210,6 +270,8 @@ class LocalApi:
                     self._send(200, {"ok": True, "version": api.version}, origin)
                 elif url.path == "/v1/preview":
                     self._preview(q, origin)
+                elif url.path in ("/v1/rows", "/v1/tables"):
+                    self._data(url.path, q, origin)
                 else:
                     self._send(404, {"error": "not_found"}, origin)
 
@@ -302,6 +364,49 @@ class LocalApi:
                 except OSError:
                     pass  # el documento ya está guardado; solo no se pudo abrir solo
                 self._send(200, {"ok": True, "name": result.name}, origin)
+
+            def _data(self, route: str, q: dict, origin: str) -> None:
+                """/v1/rows (filas de una alerta) y /v1/tables (tablas para Estadísticas). Lectura al vuelo."""
+                fid = (q.get("file") or [""])[0]
+                found = api.lookup(fid) if _UUID.match(fid) else None
+                if not found:
+                    self._send(404, {"error": "not_found"}, origin)
+                    return
+                cfg, path = found
+                sheet = (q.get("sheet") or [""])[0][:200] or None
+                wanted: list[int] = []
+                if route == "/v1/rows":
+                    raw = (q.get("rows") or [""])[0]
+                    try:
+                        wanted = sorted({int(x) for x in raw.split(",") if x.strip()})[:ROWS_MAX]
+                    except ValueError:
+                        wanted = []
+                    if not wanted or any(n < 1 or n > 2_000_000 for n in wanted):
+                        self._send(400, {"error": "bad_request"}, origin)
+                        return
+                try:
+                    if path.stat().st_size > api.max_bytes:
+                        self._send(413, {"error": "too_big"}, origin)
+                        return
+                    data = path.read_bytes()
+                except OSError:
+                    self._send(423, {"error": "busy"}, origin)
+                    return
+                try:
+                    result = build_rows(data, path, cfg, sheet, wanted) if route == "/v1/rows" else build_tables(data, path)
+                except FillError as e:
+                    self._send(e.status, {"error": e.code}, origin)
+                    return
+                except readers.ReadError:
+                    self._send(422, {"error": "unreadable"}, origin)
+                    return
+                except Exception as e:  # nunca registrar el mensaje: podría citar datos
+                    log.error("Error al leer los datos del archivo: %s", type(e).__name__)
+                    self._send(500, {"error": "error"}, origin)
+                    return
+                finally:
+                    data = b""
+                self._send(200, result, origin)
 
             def _preview(self, q: dict, origin: str) -> None:
                 fid = (q.get("file") or [""])[0]

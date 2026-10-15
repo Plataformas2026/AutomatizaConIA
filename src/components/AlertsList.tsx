@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { myShare, personalize, type MyShare } from '@/lib/assign/assign';
+import { AlertDetail } from './alerts/AlertDetail';
 import { FillDialog } from './alerts/FillDialog';
 import { createClient } from '@/lib/supabase/client';
 import { useAlerts, type AlertRow } from './AlertsProvider';
@@ -26,6 +27,7 @@ export function AlertsList({
   const [error, setError] = useState<string | null>(null);
   const [shares, setShares] = useState<Record<string, MyShare>>({});
   const [filling, setFilling] = useState<AlertRow | null>(null);
+  const [detail, setDetail] = useState<AlertRow | null>(null);
 
   // «Cuántas me corresponden»: se calcula aquí con tus nombres; en la base de datos solo hay huellas.
   const meKey = me.join('|');
@@ -138,7 +140,10 @@ export function AlertsList({
               <IconBell size={18} />
             </span>
             <div className="grow">
-              <strong className="alert-msg">{shares[a.id] ? personalize(a.message, shares[a.id]) : a.message}</strong>
+              <button type="button" className="alert-msg-btn" onClick={() => setDetail(a)} aria-label="Ver el detalle completo de la alerta">
+                <strong className="alert-msg">{shares[a.id] ? personalize(a.message, shares[a.id]) : a.message}</strong>
+                <span className="alert-more">Ver detalle y filas afectadas</span>
+              </button>
               <div className="chips">
                 <span className="tag tag-file">
                   <IconTable size={14} />
@@ -167,6 +172,9 @@ export function AlertsList({
               </time>
             </div>
             <div className="alert-actions">
+              <button className="btn" onClick={() => setDetail(a)}>
+                Ver detalle
+              </button>
               {a.template_id && a.file_id && (
                 <button className="btn primary" onClick={() => setFilling(a)}>
                   Rellenar
@@ -186,6 +194,21 @@ export function AlertsList({
           </li>
         ))}
       </ul>
+      {detail && (
+        <AlertDetail
+          alert={detail}
+          share={shares[detail.id]}
+          onFill={
+            detail.template_id && detail.file_id
+              ? () => {
+                  setFilling(detail);
+                  setDetail(null);
+                }
+              : undefined
+          }
+          onClose={() => setDetail(null)}
+        />
+      )}
       {filling && <FillDialog alert={filling} mine={shares[filling.id]?.rows ?? []} onClose={() => setFilling(null)} />}
     </>
   );

@@ -22,6 +22,8 @@ import {
   type ColumnKind,
   type StructureSheet,
 } from '@/lib/stats/types';
+import { localChart, localStructure } from '@/lib/stats/local';
+import { StatsError } from '@/lib/stats/compute';
 import { ChartRenderer } from './ChartRenderer';
 import { IconClose } from '../Icons';
 
@@ -29,6 +31,8 @@ export interface FileOption {
   id: string;
   name: string;
   mime_type: string;
+  /** 'local' = archivo de este ordenador (lo lee el agente); si falta, Drive. */
+  source?: 'drive' | 'local';
 }
 
 export interface SavedChart {
@@ -132,6 +136,7 @@ interface Props {
 export function ChartBuilder({ files, initial, projectId, onClose, onSaved }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const cache = useRef(new Map<string, StructureSheet[]>());
+  const isLocal = (id: string) => files.find((f) => f.id === id)?.source === 'local';
   const [draft, setDraft] = useState<Draft>(() => newDraft(files, initial));
   const [structure, setStructure] = useState<StructureSheet[] | null>(null);
   const [structError, setStructError] = useState<string | null>(null);
@@ -169,18 +174,28 @@ export function ChartBuilder({ files, initial, projectId, onClose, onSaved }: Pr
     }
 
     setStructure(null);
-    fetch(`/api/stats/structure?fileId=${draft.fileId}`, { cache: 'no-store' })
-      .then(async (res) => {
-        const body = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!res.ok) {
-          setStructError(ERROR_MESSAGES[body.error] ?? ERROR_MESSAGES.read_error);
-          return;
-        }
-        cache.current.set(draft.fileId, body.sheets);
-        apply(body.sheets);
-      })
-      .catch(() => !cancelled && setStructError(ERROR_MESSAGES.read_error));
+    const done = (sheets: StructureSheet[]) => {
+      if (cancelled) return;
+      cache.current.set(draft.fileId, sheets);
+      apply(sheets);
+    };
+    const fail = (code: string) => !cancelled && setStructError(ERROR_MESSAGES[code] ?? ERROR_MESSAGES.read_error);
+    const viaAgent = () =>
+      localStructure(draft.fileId).then(done).catch((e: unknown) => fail(e instanceof StatsError ? e.code : 'read_error'));
+
+    if (isLocal(draft.fileId)) {
+      void viaAgent(); // archivo de este ordenador: lo lee el agente, no el servidor
+    } else {
+      fetch(`/api/stats/structure?fileId=${draft.fileId}`, { cache: 'no-store' })
+        .then(async (res) => {
+          const body = await res.json().catch(() => ({}));
+          if (cancelled) return;
+          if (res.ok) return done(body.sheets);
+          if (body.error === 'local_file') return viaAgent();
+          fail(body.error);
+        })
+        .catch(() => fail('read_error'));
+    }
     return () => {
       cancelled = true;
     };
@@ -224,6 +239,11 @@ export function ChartBuilder({ files, initial, projectId, onClose, onSaved }: Pr
     setPreview({ status: 'loading' });
     const timer = setTimeout(async () => {
       try {
+        if (isLocal(config.fileId)) {
+          const result = await localChart(config);
+          if (!controller.signal.aborted) setPreview({ status: 'ok', config, result });
+          return;
+        }
         const res = await fetch('/api/stats/query', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -233,10 +253,14 @@ export function ChartBuilder({ files, initial, projectId, onClose, onSaved }: Pr
         const body = await res.json().catch(() => ({}));
         const item = body.results?.preview;
         if (!res.ok || !item) setPreview({ status: 'error', error: 'read_error' });
-        else if (item.error) setPreview({ status: 'error', error: item.error });
+        else if (item.error === 'local_file') {
+          const result = await localChart(config);
+          if (!controller.signal.aborted) setPreview({ status: 'ok', config, result });
+        } else if (item.error) setPreview({ status: 'error', error: item.error });
         else setPreview({ status: 'ok', config, result: item.result });
       } catch (e) {
-        if ((e as Error).name !== 'AbortError') setPreview({ status: 'error', error: 'read_error' });
+        if (controller.signal.aborted || (e as Error).name === 'AbortError') return;
+        setPreview({ status: 'error', error: e instanceof StatsError ? e.code : 'read_error' });
       }
     }, 450);
     return () => {

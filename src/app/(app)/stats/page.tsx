@@ -32,8 +32,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
 
   let filesQuery = ctx.supabase
     .from('shared_files_metadata')
-    .select('id, name, mime_type')
-    .eq('source', 'drive') // los archivos locales no salen del PC
+    .select('id, name, mime_type, source') // Drive y locales: los locales se calculan en el navegador, vía el agente
     .order('created_at', { ascending: false });
   filesQuery = projectId
     ? filesQuery.eq('project_id', projectId)
@@ -65,7 +64,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
       <h1>Estadísticas</h1>
       <p className="sub">
         Cada panel pertenece a un proyecto: las gráficas usan los archivos de ese proyecto y quien lo tenga compartido
-        las ve también. Los datos se leen de Drive en el momento y no se guardan: solo se conserva la configuración.
+        las ve también. Los datos se leen en el momento (de Drive, o de tu ordenador a través del agente) y no se guardan: solo se conserva la configuración.
       </p>
       <ProjectScope basePath="/stats" value={scope} options={options} />
       {readOnly && (

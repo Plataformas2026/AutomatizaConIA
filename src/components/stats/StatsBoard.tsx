@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MAX_CHARTS, type ChartResult, type QueryItemResult } from '@/lib/stats/types';
+import { clearLocalCache, localQuery } from '@/lib/stats/local';
 import { IconChart, IconPlus, IconRefresh } from '../Icons';
 import { ChartBuilder, type FileOption, type SavedChart } from './ChartBuilder';
 import { ChartCard, type ChartState } from './ChartCard';
@@ -37,13 +38,32 @@ export function StatsBoard({
       return next;
     });
     try {
-      const res = await fetch('/api/stats/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ charts: list.map((c) => ({ id: c.id, config: c.config })) }),
-      });
-      const body = await res.json().catch(() => ({}));
-      const results: Record<string, QueryItemResult> = body.results ?? {};
+      // Los archivos de este ordenador se calculan aquí, con los datos que entrega el agente.
+      const localIds = new Set(files.filter((f) => f.source === 'local').map((f) => f.id));
+      const mine = list.filter((c) => localIds.has(c.config.fileId));
+      const remote = list.filter((c) => !localIds.has(c.config.fileId));
+      const results: Record<string, QueryItemResult> = {};
+      const tasks: Promise<void>[] = [];
+      if (mine.length) {
+        tasks.push(localQuery(mine.map((c) => ({ id: c.id, config: c.config }))).then((r) => void Object.assign(results, r)));
+      }
+      if (remote.length) {
+        tasks.push(
+          (async () => {
+            const res = await fetch('/api/stats/query', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ charts: remote.map((c) => ({ id: c.id, config: c.config })) }),
+            });
+            const body = await res.json().catch(() => ({}));
+            Object.assign(results, (body.results ?? {}) as Record<string, QueryItemResult>);
+            // Por si el archivo es local pero la lista no lo sabía: reintento con el agente.
+            const retry = remote.filter((c) => results[c.id]?.error === 'local_file');
+            if (retry.length) Object.assign(results, await localQuery(retry.map((c) => ({ id: c.id, config: c.config }))));
+          })(),
+        );
+      }
+      await Promise.all(tasks);
       setStates((prev) => {
         const next = { ...prev };
         for (const c of list) {
@@ -61,7 +81,7 @@ export function StatsBoard({
         return next;
       });
     }
-  }, []);
+  }, [files]);
 
   useEffect(() => {
     if (loaded.current) return;
@@ -71,6 +91,7 @@ export function StatsBoard({
 
   async function refreshAll() {
     setRefreshing(true);
+    clearLocalCache(); // vuelve a leer también los archivos de este ordenador
     await load(charts);
     setRefreshing(false);
   }

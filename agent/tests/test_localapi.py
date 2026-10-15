@@ -55,6 +55,51 @@ class LocalApiTests(unittest.TestCase):
         self.assertEqual(body["rows"][0]["n"], 2)
         self.assertEqual(body["rows"][0]["cells"][0], "Cliente 1")
 
+    def test_rows_returns_requested_rows_as_text(self):
+        status, _, body = request(self.port, "GET", f"/v1/rows?file={FID}&rows=2,5,999", GOOD)
+        self.assertEqual(status, 200)
+        self.assertEqual(body["headers"], ["Cliente", "Importe", "Alta"])
+        self.assertEqual([r["n"] for r in body["rows"]], [2, 5])
+        self.assertEqual(body["rows"][0]["cells"][0], "Cliente 1")
+        self.assertEqual(body["missing"], [999])
+
+    def test_rows_validates_input_and_origin(self):
+        for q in ("", "&rows=", "&rows=abc", "&rows=0", "&rows=-3"):
+            self.assertEqual(request(self.port, "GET", f"/v1/rows?file={FID}{q}", GOOD)[0], 400, q)
+        self.assertEqual(request(self.port, "GET", "/v1/rows?file=nope&rows=2", GOOD)[0], 404)
+        self.assertEqual(request(self.port, "GET", f"/v1/rows?file={FID}&rows=2", {"Origin": "https://malo.com", "X-Automatiza": "1"})[0], 403)
+        many = ",".join(str(i) for i in range(2, 400))
+        status, _, body = request(self.port, "GET", f"/v1/rows?file={FID}&rows={many}", GOOD)
+        self.assertEqual((status, len(body["rows"])), (200, 150))  # se piden como mucho 200; el archivo tiene 150 filas
+
+    def test_tables_for_stats(self):
+        status, _, body = request(self.port, "GET", f"/v1/tables?file={FID}", GOOD)
+        self.assertEqual(status, 200)
+        self.assertEqual(len(body["sheets"]), 1)
+        sh = body["sheets"][0]
+        self.assertEqual(sh["headers"], ["Cliente", "Importe", "Alta"])
+        self.assertEqual(len(sh["rows"]), 150)
+        self.assertEqual(sh["rows"][0]["n"], 2)
+        self.assertEqual(sh["rows"][0]["v"][0], "Cliente 1")
+        self.assertFalse(body["truncated"])
+        self.assertEqual(request(self.port, "GET", "/v1/tables?file=nope", GOOD)[0], 404)
+
+    def test_tables_encode_dates_and_cap_cells(self):
+        from datetime import date as _d
+        enc = localapi._encode_value
+        self.assertEqual(enc(datetime(2026, 3, 1, 14, 30)), {"d": "2026-03-01"})
+        self.assertEqual(enc(_d(2026, 3, 2)), {"d": "2026-03-02"})
+        self.assertIsNone(enc(float("nan")))
+        self.assertEqual(enc(3.5), 3.5)
+        old = localapi.TABLES_MAX_CELLS
+        localapi.TABLES_MAX_CELLS = 30  # 10 filas × 3 columnas
+        try:
+            _, _, body = request(self.port, "GET", f"/v1/tables?file={FID}", GOOD)
+        finally:
+            localapi.TABLES_MAX_CELLS = old
+        self.assertEqual(len(body["sheets"][0]["rows"]), 10)
+        self.assertTrue(body["truncated"] and body["sheets"][0]["truncated"])
+
     def test_foreign_origin_or_missing_header_rejected(self):
         self.assertEqual(request(self.port, "GET", "/v1/ping", {"Origin": "https://malo.com", "X-Automatiza": "1"})[0], 403)
         self.assertEqual(request(self.port, "GET", "/v1/ping", {"X-Automatiza": "1"})[0], 403)

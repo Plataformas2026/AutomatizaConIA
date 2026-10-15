@@ -12,9 +12,12 @@ import { MAX_CONDITION_DEPTH, MAX_CONDITION_LEAVES, type Condition } from './typ
  * Borrador del editor de condiciones (lo que se ve en pantalla) ↔ condición guardada.
  * Sin dependencias de React: se prueba aparte.
  */
+export type Join = 'and' | 'or';
 export interface LeafDraft {
   id: string;
   kind: 'leaf';
+  /** Conector con la condición anterior del mismo grupo (el de la primera no se usa). */
+  join: Join;
   column: string;
   operator: Operator;
   rightType: 'column' | 'value';
@@ -29,7 +32,7 @@ export interface LeafDraft {
 export interface GroupDraft {
   id: string;
   kind: 'group';
-  op: 'and' | 'or';
+  join: Join;
   children: NodeDraft[];
 }
 export type NodeDraft = LeafDraft | GroupDraft;
@@ -39,12 +42,13 @@ export const uid = () => `n${++counter}`;
 
 export function newLeaf(column = '', over: Partial<LeafDraft> = {}): LeafDraft {
   return {
-    id: uid(), kind: 'leaf', column, operator: 'eq', rightType: 'value', rightColumn: column, rightValue: '',
+    id: uid(), kind: 'leaf', join: 'and', column, operator: 'eq', rightType: 'value', rightColumn: column, rightValue: '',
     valueAsDate: false, elapsedN: '30', unit: 'days', dateValue: '', ...over,
   };
 }
-export function newGroup(op: 'and' | 'or' = 'and', children: NodeDraft[] = []): GroupDraft {
-  return { id: uid(), kind: 'group', op, children };
+/** `op` fija el conector de todos los hijos (atajo); luego cada uno se puede cambiar por separado. */
+export function newGroup(op: Join = 'and', children: NodeDraft[] = [], join: Join = 'and'): GroupDraft {
+  return { id: uid(), kind: 'group', join, children: children.map((c) => ({ ...c, join: op })) };
 }
 
 export function countLeaves(n: NodeDraft): number {
@@ -54,11 +58,24 @@ export function depthOf(n: NodeDraft): number {
   return n.kind === 'leaf' ? 1 : 1 + Math.max(0, ...n.children.map(depthOf));
 }
 
-/** Borrador → condición. Un grupo con una sola condición simple se guarda como condición simple. */
+/**
+ * Borrador → condición. Los conectores se leen como en una frase: «Y» une más fuerte que «O»
+ * (A y B o C = (A y B) o C). Para otro orden se usan grupos (paréntesis).
+ * Un grupo con una sola condición se guarda como condición simple.
+ */
 export function toCondition(n: NodeDraft): Condition {
   if (n.kind === 'group') {
     if (n.children.length === 1) return toCondition(n.children[0]);
-    return { kind: 'group', op: n.op, conditions: n.children.map(toCondition) };
+    const runs: NodeDraft[][] = [];
+    n.children.forEach((c, i) => {
+      if (i === 0 || c.join === 'or') runs.push([c]);
+      else runs[runs.length - 1].push(c);
+    });
+    const parts: Condition[] = runs.map((r) =>
+      r.length === 1 ? toCondition(r[0]) : { kind: 'group' as const, op: 'and' as const, conditions: r.map(toCondition) },
+    );
+    if (parts.length === 1) return parts[0];
+    return { kind: 'group', op: 'or', conditions: parts };
   }
   const base = { kind: 'compare' as const, left: { type: 'column' as const, column: n.column }, operator: n.operator };
   if (n.operator === 'elapsed') return { ...base, unit: n.unit, right: { type: 'value', value: Number(n.elapsedN) } };
@@ -74,7 +91,19 @@ export function toCondition(n: NodeDraft): Condition {
 export function fromCondition(c: unknown, columns: string[] = []): NodeDraft {
   const o = (c ?? {}) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
   if (o.kind === 'group' && Array.isArray(o.conditions)) {
-    return newGroup(o.op === 'or' ? 'or' : 'and', o.conditions.map((k: unknown) => fromCondition(k, columns)));
+    const children: NodeDraft[] = [];
+    for (const k of o.conditions as unknown[]) {
+      const ko = (k ?? {}) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (o.op === 'or' && ko.kind === 'group' && ko.op === 'and' && Array.isArray(ko.conditions) && ko.conditions.length > 1) {
+        // «(A y B) o C» se muestra como la cadena plana A y B o C.
+        (ko.conditions as unknown[]).forEach((g, gi) =>
+          children.push({ ...fromCondition(g, columns), join: gi === 0 ? 'or' : 'and' }),
+        );
+      } else {
+        children.push({ ...fromCondition(k, columns), join: o.op === 'or' ? 'or' : 'and' });
+      }
+    }
+    return { id: uid(), kind: 'group', join: 'and', children };
   }
   const column = String(o.left?.column ?? columns[0] ?? '');
   const op = (o.operator ?? 'eq') as Operator;
