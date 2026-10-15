@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useEmails } from '../EmailsProvider';
 import { IconCheck, IconFolder, IconMail, IconTable } from '../Icons';
 
 export interface OutboxItem {
@@ -29,6 +30,9 @@ export interface OutboxItem {
 export function OutboxPanel({ items: initial, projects }: { items: OutboxItem[]; projects: { id: string; name: string }[] }) {
   const router = useRouter();
   const [items, setItems] = useState(initial);
+  const { refreshPending } = useEmails();
+  // Llegan correos nuevos (o se envían desde el agente): la lista sigue al servidor.
+  useEffect(() => setItems(initial), [initial]);
   const [filter, setFilter] = useState('all');
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +49,7 @@ export function OutboxPanel({ items: initial, projects }: { items: OutboxItem[];
       return;
     }
     setItems((cur) => cur.filter((i) => i.id !== id));
+    void refreshPending();
     router.refresh();
   }
 

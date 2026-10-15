@@ -25,6 +25,9 @@ import {
   type MlTask,
 } from '@/lib/ml/types';
 import { ERROR_MESSAGES, type StructureSheet } from '@/lib/stats/types';
+import { StatsError } from '@/lib/stats/compute';
+import { localStructure } from '@/lib/stats/local';
+import { localMl } from '@/lib/ml/local';
 import { IconDownload, IconPrint, IconSpark } from '../Icons';
 import type { FileOption } from '../stats/ChartBuilder';
 import { downloadText, resultCsv, slug } from './exports';
@@ -137,15 +140,27 @@ export function ModelStudio({ files }: Props) {
       return () => { cancelled = true; };
     }
     setStructure(null);
-    fetch(`/api/stats/structure?fileId=${draft.fileId}`, { cache: 'no-store' })
-      .then(async (res) => {
-        const body = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!res.ok) return setStructError(ALL_ERRORS[body.error] ?? ALL_ERRORS.read_error);
-        cache.current.set(draft.fileId, body.sheets);
-        apply(body.sheets);
-      })
-      .catch(() => !cancelled && setStructError(ALL_ERRORS.read_error));
+    const done = (sheets: StructureSheet[]) => {
+      if (cancelled) return;
+      cache.current.set(draft.fileId, sheets);
+      apply(sheets);
+    };
+    const fail = (code: string) => !cancelled && setStructError(ALL_ERRORS[code] ?? ALL_ERRORS.read_error);
+    const viaAgent = () =>
+      localStructure(draft.fileId).then(done).catch((e: unknown) => fail(e instanceof StatsError ? e.code : 'read_error'));
+    if (files.find((f) => f.id === draft.fileId)?.source === 'local') {
+      void viaAgent(); // archivo de este ordenador: lo lee el agente
+    } else {
+      fetch(`/api/stats/structure?fileId=${draft.fileId}`, { cache: 'no-store' })
+        .then(async (res) => {
+          const body = await res.json().catch(() => ({}));
+          if (cancelled) return;
+          if (res.ok) return done(body.sheets);
+          if (body.error === 'local_file') return viaAgent();
+          fail(body.error);
+        })
+        .catch(() => fail('read_error'));
+    }
     return () => { cancelled = true; };
   }, [draft.fileId]);
 
@@ -180,22 +195,32 @@ export function ModelStudio({ files }: Props) {
     setRunning(true);
     setRunError(null);
     try {
-      const res = await fetch('/api/ml/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok || !body.result) {
-        setRunError(ALL_ERRORS[body.error] ?? ALL_ERRORS.read_error);
+      let result: MlResult | null = null;
+      let code = 'read_error';
+      if (files.find((f) => f.id === config.fileId)?.source === 'local') {
+        result = await localMl(config); // se entrena en tu navegador con los datos que entrega el agente
+      } else {
+        const res = await fetch('/api/ml/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ config }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok && body.result) result = body.result as MlResult;
+        else if (body.error === 'local_file') result = await localMl(config);
+        else code = body.error;
+      }
+      if (!result) {
+        setRunError(ALL_ERRORS[code] ?? ALL_ERRORS.read_error);
         setResult(null);
       } else {
-        setResult(body.result as MlResult);
+        setResult(result);
         setResultConfig(config);
         requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
       }
-    } catch {
-      setRunError(ALL_ERRORS.read_error);
+    } catch (e) {
+      setRunError(ALL_ERRORS[e instanceof StatsError ? e.code : 'read_error'] ?? ALL_ERRORS.read_error);
+      setResult(null);
     }
     setRunning(false);
   }
@@ -384,7 +409,7 @@ export function ModelStudio({ files }: Props) {
               {running ? 'Analizando…' : 'Analizar mis datos'}
             </button>
             {!parsed.success && <span className="muted">{parsed.error.issues[0]?.message}</span>}
-            <span className="muted grow privacy-note">Tus datos se leen de tu Drive en el momento y no se guardan.</span>
+            <span className="muted grow privacy-note">Tus datos se leen en el momento (de tu Drive o de tu ordenador, vía el agente) y no se guardan.</span>
           </div>
         )}
       </section>

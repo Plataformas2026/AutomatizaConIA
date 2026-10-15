@@ -806,3 +806,9 @@ input[type='radio'], input[type='checkbox'] { width: auto; accent-color: var(--v
 }
 .howto { padding-left: 20px; display: grid; gap: 6px; }
 code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; font-size: 0.92em; }
+
+/* Contador de correos pendientes (mismo gesto que el de alertas, en azul) */
+.badge-mail { background: var(--info); }
+.bell.has-unread.has-mail svg { color: var(--info); }
+.toast-mail .toast-icon { background: var(--info-soft); color: var(--info); }
+.toast-mail.sev-warning .toast-icon { background: var(--warning-soft); color: var(--warning); }

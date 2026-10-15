@@ -55,3 +55,21 @@ test('local: las tablas del agente se leen igual que las de Drive (tipos y gráf
 test('local: hoja inexistente → sheet_not_found', () => {
   assert.throws(() => pickTable(decodeTables(payload), 'Nada'), (e) => e instanceof StatsError && e.code === 'sheet_not_found');
 });
+
+test('local: un modelo se entrena con las tablas del agente y da lo mismo que con la misma tabla leída de otro modo', async () => {
+  const { runMl } = await import('@/lib/ml/run');
+  const { mlConfigSchema } = await import('@/lib/ml/types');
+  const rows = Array.from({ length: 80 }, (_, i) => ({ n: i + 2, v: [i % 2 ? 'A' : 'B', i * 2 + (i % 3), 10 + i] }));
+  const sheets = decodeTables({
+    fileName: 'm.csv', truncated: false,
+    sheets: [{ name: null, headers: ['Tipo', 'Horas', 'Coste'], truncated: false, rows }],
+  });
+  const cfg = mlConfigSchema.parse({
+    task: 'regression', fileId: '0a1b2c3d-0000-4000-8000-0123456789ab', sheet: null, title: '',
+    target: 'Coste', features: ['Horas'], algorithm: 'linear', trainPct: 80, depth: 5, clusters: null, sensitivity: 'normal', anomalyMethod: 'iqr',
+  });
+  const a = runMl(pickTable(sheets, null), cfg);
+  const b = runMl(pickTable(decodeTables(JSON.parse(JSON.stringify({ fileName: 'm.csv', truncated: false, sheets: [{ name: null, headers: ['Tipo', 'Horas', 'Coste'], truncated: false, rows }] }))), null), cfg);
+  assert.deepEqual(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(b)));
+  assert.equal(a.task, 'regression');
+});

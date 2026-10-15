@@ -11,7 +11,7 @@ import type { ChartConfig, ChartResult, QueryItemResult, StructureSheet } from '
  */
 const TTL_MS = 60_000;
 
-interface LocalSheet {
+export interface LocalSheet {
   name: string | null;
   table: ParsedTable;
 }
@@ -57,7 +57,7 @@ export function decodeTables(data: TablesData): LocalSheet[] {
   }));
 }
 
-function sheetsOf(fileId: string): Promise<LocalSheet[]> {
+export function sheetsOf(fileId: string): Promise<LocalSheet[]> {
   const hit = cache.get(fileId);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.promise;
   const promise = localTables(fileId)
