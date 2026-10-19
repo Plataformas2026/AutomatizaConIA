@@ -37,6 +37,8 @@ export interface RuleRow {
     message?: string;
     severity?: string;
     assignColumn?: string;
+    senderColumn?: string;
+    audience?: string;
     templateId?: string;
     from?: string;
     to?: string;
@@ -103,6 +105,7 @@ export function RulesPanel({ ownerUserId, templates = [], fileId, fileName, init
   const [tree, setTree] = useState<GroupDraft>(() => newGroup('and', [newLeaf('')]));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [assignColumn, setAssignColumn] = useState('');
+  const [audience, setAudience] = useState<'assigned' | 'everyone'>('assigned');
   const [templateId, setTemplateId] = useState('');
   const [message, setMessage] = useState('');
   const [msgReset, setMsgReset] = useState(0);
@@ -164,10 +167,10 @@ export function RulesPanel({ ownerUserId, templates = [], fileId, fileName, init
     const condition = toCondition(tree);
     const actions = [
       ...(alertOn
-        ? [{ type: 'alert', message, severity, ...(assignColumn ? { assignColumn } : {}), ...(templateId ? { templateId } : {}) }]
+        ? [{ type: 'alert', message, severity, ...(assignColumn ? { assignColumn } : {}), audience, ...(templateId ? { templateId } : {}) }]
         : []),
       ...(emailOn
-        ? [{ type: 'email', from: email.from, to: email.to, cc: email.cc, subject: email.subject, body: email.body, mode: email.mode }]
+        ? [{ type: 'email', from: email.from, to: email.to, cc: email.cc, subject: email.subject, body: email.body, mode: email.mode, audience, ...(assignColumn ? { senderColumn: assignColumn } : {}) }]
         : []),
     ];
     const res = await fetch(editingId ? `/api/rules/${editingId}` : '/api/rules', {
@@ -193,6 +196,7 @@ export function RulesPanel({ ownerUserId, templates = [], fileId, fileName, init
     setEmailOn(false);
     setAlertOn(true);
     setAssignColumn('');
+    setAudience('assigned');
     setTemplateId('');
     setSeverity('info');
     setTree(fixColumns(newGroup('and', [newLeaf('')]), (columns ?? []).map((c) => c.name)) as GroupDraft);
@@ -211,7 +215,9 @@ export function RulesPanel({ ownerUserId, templates = [], fileId, fileName, init
     setAlertOn(!!al);
     setMessage(al?.message ?? '');
     setSeverity((al?.severity as 'info' | 'warning' | 'critical') ?? 'info');
-    setAssignColumn(al?.assignColumn && names.includes(al.assignColumn) ? al.assignColumn : '');
+    const col = al?.assignColumn ?? em?.senderColumn ?? '';
+    setAssignColumn(names.includes(col) ? col : '');
+    setAudience(((al ?? em)?.audience as 'assigned' | 'everyone') === 'everyone' ? 'everyone' : 'assigned');
     setTemplateId(al?.templateId && templates.some((t) => t.id === al.templateId) ? al.templateId : '');
     setEmailOn(!!em);
     setEmail(
@@ -293,6 +299,39 @@ export function RulesPanel({ ownerUserId, templates = [], fileId, fileName, init
                 </label>
               </fieldset>
 
+              {(alertOn || emailOn) && (
+                <div className="assign-box">
+                  <div className="field">
+                    <label htmlFor="assign-col">¿Quién es el responsable de cada fila? (opcional)</label>
+                    <select id="assign-col" value={assignColumn} onChange={(e) => setAssignColumn(e.target.value)}>
+                      <option value="">No repartir</option>
+                      {columns.map((c) => (
+                        <option key={c.name} value={c.name}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="muted">
+                      Elige la columna con el nombre o el correo de quien se ocupa de la fila. Sirve para la alerta («Quedan 7
+                      informes, 3 te corresponden a ti») y para el correo: lo recibe y lo deja en borradores quien sea su
+                      responsable. Si la celda tiene dos nombres, «ana / luis», avisa a Ana y ella puede pasar la tarea a Luis. En
+                      la base de datos solo se guardan huellas de los nombres y los números de fila, nunca los nombres.
+                    </span>
+                  </div>
+                  <fieldset className="field">
+                    <legend className="field-title">¿Quién recibe el aviso en un proyecto compartido?</legend>
+                    <label className="choice">
+                      <input type="radio" name="audience" checked={audience === 'assigned'} onChange={() => setAudience('assigned')} />
+                      <span>Solo su responsable (y las personas a las que he dado «todos los avisos»)</span>
+                    </label>
+                    <label className="choice">
+                      <input type="radio" name="audience" checked={audience === 'everyone'} onChange={() => setAudience('everyone')} />
+                      <span>Todo el proyecto: todas las personas con las que lo comparto</span>
+                    </label>
+                  </fieldset>
+                </div>
+              )}
+
               {alertOn && (
                 <>
               <MessageBuilder
@@ -325,22 +364,6 @@ export function RulesPanel({ ownerUserId, templates = [], fileId, fileName, init
               </div>
 
               <div className="assign-box">
-                <div className="field">
-                  <label htmlFor="assign-col">¿A quién corresponde cada fila? (opcional)</label>
-                  <select id="assign-col" value={assignColumn} onChange={(e) => setAssignColumn(e.target.value)}>
-                    <option value="">No repartir</option>
-                    {columns.map((c) => (
-                      <option key={c.name} value={c.name}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="muted">
-                    Elige la columna con el nombre o el correo de la persona responsable. Cada persona verá en la alerta
-                    cuántas filas le corresponden: «Quedan 7 informes sin completar, 3 te corresponden a ti». En la base de
-                    datos solo se guardan huellas de los nombres y los números de fila, nunca los nombres.
-                  </span>
-                </div>
                 {templates.length > 0 && (
                   <div className="field">
                     <label htmlFor="tpl">Botón «Rellenar» con una plantilla (opcional)</label>
@@ -408,6 +431,7 @@ export function RulesPanel({ ownerUserId, templates = [], fileId, fileName, init
                 <div className="rule-msg" key={i}>
                   {humanizeTemplate(a.message ?? '')}
                   {a.assignColumn && <span className="muted"> · reparto por «{a.assignColumn}»</span>}
+                  {a.audience === 'everyone' && <span className="muted"> · para todo el proyecto</span>}
                   {a.templateId && <span className="muted"> · con botón «Rellenar»</span>}
                 </div>
               ),

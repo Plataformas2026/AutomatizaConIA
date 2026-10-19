@@ -36,7 +36,7 @@ import outlook
 import readers
 import remote_log
 
-VERSION = "1.8.0"
+VERSION = "1.9.0"
 LOCK_PORT = 47653  # evita dos agentes a la vez (se libera sola al cerrar)
 log = logging.getLogger("agente")
 

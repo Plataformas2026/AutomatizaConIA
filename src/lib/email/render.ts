@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Cell } from '@/lib/parsing/parse';
 import type { EmailAction } from '@/lib/rules/types';
+import { cellKeys } from '@/lib/assign/assign';
 import { parseRecipients } from './address';
 
 export { parseRecipients };
@@ -144,6 +145,8 @@ export interface EmailDraft {
   body: string;
   /** Por qué no se puede enviar solo (destinatario no válido, columna desaparecida…). */
   problem: string | null;
+  /** Quién tiene que mandarlo: nombres de la celda de responsable ['ana', 'luis']. Solo en «uno por fila». */
+  sender?: string[];
 }
 
 function oneLine(s: string): string {
@@ -170,6 +173,7 @@ export function buildEmails(
 ): EmailDraft[] {
   if (matched.length === 0) return [];
   const used = referencedColumns([action.to, action.cc, action.subject, action.body]);
+  if (action.senderColumn && !used.includes(action.senderColumn)) used.push(action.senderColumn);
   const missing = used.filter((c) => !headers.includes(c));
 
   const make = (rows: MatchedRow[], perRow: boolean): EmailDraft => {
@@ -192,6 +196,7 @@ export function buildEmails(
       subject,
       body,
       problem,
+      ...(perRow && action.senderColumn ? { sender: cellKeys(rows[0].values[action.senderColumn]) } : {}),
     };
   };
 

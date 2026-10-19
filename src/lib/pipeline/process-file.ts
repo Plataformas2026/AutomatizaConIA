@@ -4,7 +4,7 @@ import { decrypt, matchFingerprint } from '@/lib/crypto';
 import { forgetAccessToken, getAccessToken, GoogleAuthRevokedError } from '@/lib/google/oauth';
 import { downloadFile, FileTooLargeError, getFileMeta, GoogleApiError } from '@/lib/google/drive';
 import { parseMimeFor, parseWorkbook, type SheetSelection } from '@/lib/parsing/parse';
-import { buildAssignees } from '@/lib/assign/assign';
+import { buildAssignees, buildChains } from '@/lib/assign/assign';
 import { evaluateRuleAcrossSheets, primaryColumn } from '@/lib/rules/engine';
 import { ruleSchema } from '@/lib/rules/types';
 import { runActions } from '@/lib/actions';
@@ -119,7 +119,7 @@ export async function processFile(fileId: string, opts: { force?: boolean } = {}
       const rule = parsed.data;
       // Columnas que necesitan los correos de esta regla (para leer solo esas celdas).
       const emailColumns = rule.actions.flatMap((a) =>
-        a.type === 'email' ? referencedColumns([a.to, a.subject, a.body]) : [],
+        a.type === 'email' ? [...referencedColumns([a.to, a.cc, a.subject, a.body]), ...(a.senderColumn ? [a.senderColumn] : [])] : [],
       );
       const evaluation = evaluateRuleAcrossSheets(rule, workbook.sheets);
 
@@ -166,10 +166,12 @@ export async function processFile(fileId: string, opts: { force?: boolean } = {}
             assignees: async (column) => {
               if (!sheetTable || !sheetTable.headers.includes(column)) return null;
               const wanted = new Set(sheet.matchedRows);
-              return buildAssignees(
-                rule.id,
-                sheetTable.rows.filter((r) => wanted.has(r.rowNumber)).map((r) => [r.rowNumber, r.values[column]] as [number, unknown]),
-              );
+              const shown = new Set(sheet.matchedRows.slice(0, 200));
+              const pairs = sheetTable.rows.filter((r) => wanted.has(r.rowNumber)).map((r) => [r.rowNumber, r.values[column]] as [number, unknown]);
+              return {
+                assignees: await buildAssignees(rule.id, pairs),
+                chains: await buildChains(rule.id, pairs.filter((p) => shown.has(p[0]))),
+              };
             },
           });
           alerts++;

@@ -44,7 +44,7 @@ interface OutboxPayload {
 }
 
 /**
- * Una sola suscripción Realtime para los correos pendientes de la empresa (RLS: solo los tuyos).
+ * Una sola suscripción Realtime para tus correos pendientes (RLS: los de tu empresa y los que te tocan enviar a ti).
  * Del correo solo se usan el nombre de la regla, del archivo y la fila para el aviso: ni asunto ni texto.
  */
 export function EmailsProvider({ companyId, initialPending, children }: { companyId: string; initialPending: number; children: React.ReactNode }) {
@@ -61,7 +61,6 @@ export function EmailsProvider({ companyId, initialPending, children }: { compan
     const { count, error } = await createClient()
       .from('email_outbox')
       .select('id', { count: 'exact', head: true })
-      .eq('company_id', companyId)
       .in('status', ['pending', 'drafted']);
     if (!error && count !== null) setPending(count);
   }, [companyId]);
@@ -79,7 +78,7 @@ export function EmailsProvider({ companyId, initialPending, children }: { compan
       .channel(`emails-live:${companyId}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'email_outbox', filter: `company_id=eq.${companyId}` },
+        { event: 'INSERT', schema: 'public', table: 'email_outbox' },
         (payload) => {
           const o = payload.new as OutboxPayload;
           if (seen.current.has(o.id) || !['pending', 'drafted'].includes(o.status)) return;
@@ -96,7 +95,16 @@ export function EmailsProvider({ companyId, initialPending, children }: { compan
         },
       )
       // Enviado, descartado o enviado por el agente: el contador se corrige con el número real.
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'email_outbox', filter: `company_id=eq.${companyId}` }, () => {
+      // Si una tarea te la pasan, el correo cambia de responsable y te llega como nuevo (RLS solo avisa al que lo ve).
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'email_outbox' }, (payload) => {
+        const o = payload.new as OutboxPayload;
+        if (!seen.current.has(o.id) && ['pending', 'drafted'].includes(o.status)) {
+          seen.current.add(o.id);
+          setToasts((prev) =>
+            [{ id: o.id, ruleName: o.rule_name ?? '', fileName: o.file_name ?? '', sheetName: o.sheet_name, rowNumber: o.row_number, problem: !!o.problem }, ...prev].slice(0, MAX_TOASTS),
+          );
+          timers.current.set(o.id, setTimeout(() => dismissToast(o.id), TOAST_MS));
+        }
         void refreshPending();
         if (onEmailsPage.current) router.refresh();
       })

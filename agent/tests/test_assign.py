@@ -20,6 +20,16 @@ class AssignTests(unittest.TestCase):
         self.assertEqual(a.identifiers(i["email"], i["aliases"]), i["expected"])
         self.assertEqual(a.digest(CASES["ruleId"], "-"), CASES["unassigned"])
 
+    def test_chains_and_handoff(self):
+        rows = [tuple(r) for r in CASES["rows"]]
+        self.assertEqual(a.build_chains(CASES["ruleId"], rows), CASES["chains"])
+        h = {int(k): v for k, v in CASES["handoff"]["handoffs"].items()}
+        for p in CASES["handoff"]["people"]:
+            s = a.my_share(CASES["assignees"], CASES["ruleId"], a.identifiers(p["email"], p["aliases"]), CASES["chains"], h)
+            self.assertEqual(s["mine"], p["mine"], p["email"])
+            if "rows" in p:
+                self.assertEqual(s["rows"], p["rows"], p["email"])
+
     def test_limits(self):
         many = a.build_assignees("r", [(n, f"persona {n}") for n in range(2, 400)])
         self.assertEqual(len(many), a.MAX_PEOPLE)

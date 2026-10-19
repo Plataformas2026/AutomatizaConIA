@@ -2,7 +2,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Action, AlertAction, EmailAction } from '@/lib/rules/types';
 import { buildEmails, type MatchedRow } from '@/lib/email/render';
-import type { Assignees } from '@/lib/assign/assign';
+import type { Assignees, Chains } from '@/lib/assign/assign';
 import { variablePattern, type VariableKey } from '@/lib/messages/variables';
 
 /**
@@ -30,7 +30,7 @@ export interface ActionContext {
   /** Columnas que existen en la hoja donde se detectó. */
   headers: string[];
   /** Reparto de las filas que cumplen la regla por persona (huellas, nunca nombres). null si la columna no existe. */
-  assignees?: (column: string) => Promise<Assignees | null>;
+  assignees?: (column: string) => Promise<{ assignees: Assignees; chains: Chains } | null>;
 }
 
 /** PRIVACIDAD: las plantillas solo admiten variables que NO provienen de las
@@ -50,7 +50,7 @@ export function renderMessage(template: string, ctx: ActionContext): string {
 }
 
 async function runAlert(action: AlertAction, ctx: ActionContext): Promise<void> {
-  const assignees = action.assignColumn && ctx.assignees ? await ctx.assignees(action.assignColumn) : null;
+  const assigned = action.assignColumn && ctx.assignees ? await ctx.assignees(action.assignColumn) : null;
   let templateId: string | null = null;
   if (action.templateId) {
     const { data } = await ctx.admin
@@ -72,7 +72,8 @@ async function runAlert(action: AlertAction, ctx: ActionContext): Promise<void> 
     severity: action.severity,
     matched_count: ctx.matchedCount,
     row_refs: ctx.rowRefs.slice(0, 200),
-    assignees: assignees ?? {},
+    assignees: assigned?.assignees ?? {},
+    chains: assigned?.chains ?? {},
     template_id: templateId,
   });
   if (error) throw new Error(`No se pudo guardar la alerta: ${error.code ?? error.message}`);
@@ -109,6 +110,7 @@ async function runEmail(action: EmailAction, ctx: ActionContext): Promise<void> 
       subject: d.subject,
       body: d.body,
       problem: d.problem,
+      sender_chain: (d.sender ?? []).slice(0, 5),
     })),
     { onConflict: 'rule_id,dedupe_key', ignoreDuplicates: true },
   );

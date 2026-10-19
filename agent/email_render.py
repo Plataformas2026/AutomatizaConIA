@@ -13,6 +13,8 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
+import assign
+
 MAX_EMAILS_PER_RULE = 25
 MAX_DISTINCT_VALUES = 10
 MAX_TEXT_CELL = 200
@@ -125,6 +127,9 @@ def build_emails(action: dict, rule_id: str, meta: dict, matched: list[dict], he
     if not matched:
         return []
     used = referenced_columns([action["to"], action.get("cc") or "", action["subject"], action["body"]])
+    sender_col = action.get("sender_column") or ""
+    if sender_col and sender_col not in used:
+        used.append(sender_col)
     missing = [c for c in used if c not in headers]
 
     def make(rows: list[dict], per_row: bool) -> dict:
@@ -151,6 +156,8 @@ def build_emails(action: dict, rule_id: str, meta: dict, matched: list[dict], he
             "subject": subject,
             "body": body,
             "problem": problem,
+            # «Ana / Luis» → ['ana', 'luis']: el primero es el responsable de mandar este correo.
+            **({"sender": assign.cell_keys(rows[0]["values"].get(sender_col))} if (per_row and sender_col) else {}),
         }
 
     if action.get("mode") == "summary":

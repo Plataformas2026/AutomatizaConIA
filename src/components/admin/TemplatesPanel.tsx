@@ -197,6 +197,17 @@ export function TemplatesPanel({ userId, files }: { userId: string; files: FileO
 export function AliasesPanel({ userId }: { userId: string }) {
   const [text, setText] = useState('');
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
+  const [unlinked, setUnlinked] = useState<string[]>([]);
+
+  const loadUnlinked = () =>
+    fetch('/api/admin/aliases?unlinked=1', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b: { unlinked?: string[] } | null) => setUnlinked(b?.unlinked ?? []))
+      .catch(() => undefined);
+
+  useEffect(() => {
+    void loadUnlinked();
+  }, [userId]);
 
   useEffect(() => {
     setMsg(null);
@@ -213,7 +224,13 @@ export function AliasesPanel({ userId }: { userId: string }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, aliases }),
     });
-    setMsg(res.ok ? { text: 'Nombres guardados.' } : { text: 'No se pudieron guardar (máximo 10, de hasta 100 caracteres).', error: true });
+    if (!res.ok) {
+      setMsg({ text: 'No se pudieron guardar (máximo 10, de hasta 100 caracteres).', error: true });
+      return;
+    }
+    const b = (await res.json().catch(() => ({}))) as { resolved?: number };
+    setMsg({ text: b.resolved ? `Nombres guardados. ${b.resolved} correo(s) pendiente(s) ya tienen responsable.` : 'Nombres guardados.' });
+    void loadUnlinked();
   }
 
   return (
@@ -234,6 +251,27 @@ export function AliasesPanel({ userId }: { userId: string }) {
         </button>
       </div>
       {msg && <p className={msg.error ? 'err' : 'ok'} role="status">{msg.text}</p>}
+      {unlinked.length > 0 && (
+        <>
+          <h3 className="share-h">Responsables de los Excel sin enlazar</h3>
+          <p className="muted">
+            Estos nombres aparecen en la columna de responsable de una regla de correo y no corresponden a nadie: sus correos
+            esperan. Pulsa un nombre para añadirlo a esta persona y guarda.
+          </p>
+          <p className="chips">
+            {unlinked.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className="btn ghost-line"
+                onClick={() => setText((t) => (t.split(/[;\n]+/).some((x) => x.trim().toLowerCase() === n) ? t : t ? `${t}; ${n}` : n))}
+              >
+                {n}
+              </button>
+            ))}
+          </p>
+        </>
+      )}
     </section>
   );
 }

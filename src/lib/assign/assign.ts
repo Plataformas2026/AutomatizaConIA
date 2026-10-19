@@ -54,10 +54,27 @@ export async function buildAssignees(ruleId: string, rows: Iterable<[number, unk
       add(await digest(ruleId, UNASSIGNED), number);
       continue;
     }
-    for (const k of keys) add(await digest(ruleId, k), number);
+    add(await digest(ruleId, keys[0]), number); // «Ana / Luis»: la tarea es de Ana; Luis queda de reserva (ver buildChains)
   }
   const entries = Object.entries(out);
   if (entries.length > MAX_PEOPLE) out = Object.fromEntries(entries.sort((a, b) => b[1].n - a[1].n).slice(0, MAX_PEOPLE));
+  return out;
+}
+
+export const MAX_CHAIN_ROWS = 200;
+export const MAX_CHAIN = 5;
+/** fila → huellas de [responsable, 2.º, 3.º…]. */
+export type Chains = Record<string, string[]>;
+/** fila → posición actual en la cadena (0 = el primero). Solo hay entradas de las filas que se han traspasado. */
+export type Handoffs = Record<number, number>;
+
+/** Filas con VARIOS nombres («Ana / Luis»). El primero es el responsable; la tarea puede pasarse al siguiente. */
+export async function buildChains(ruleId: string, rows: Iterable<[number, unknown]>): Promise<Chains> {
+  const out: Chains = {};
+  for (const [number, cell] of rows) {
+    const keys = cellKeys(cell).slice(0, MAX_CHAIN);
+    if (keys.length >= 2 && Object.keys(out).length < MAX_CHAIN_ROWS) out[String(number)] = await Promise.all(keys.map((k) => digest(ruleId, k)));
+  }
   return out;
 }
 
@@ -69,7 +86,7 @@ export function identifiers(email: string, aliases: string[] = []): string[] {
 }
 
 export interface MyShare {
-  /** Filas que cumplen la regla y te corresponden (suma por nombre; una fila con dos nombres tuyos cuenta dos veces). */
+  /** Filas que cumplen la regla y te corresponden (la tarea es del primer nombre de la celda, salvo que se haya pasado). */
   mine: number;
   /** Primeras filas tuyas (para elegir cuál rellenar). */
   rows: number[];
@@ -77,7 +94,13 @@ export interface MyShare {
   unassigned: number;
 }
 
-export async function myShare(assignees: Assignees | null | undefined, ruleId: string, ids: string[]): Promise<MyShare> {
+export async function myShare(
+  assignees: Assignees | null | undefined,
+  ruleId: string,
+  ids: string[],
+  chains?: Chains | null,
+  handoffs?: Handoffs | null,
+): Promise<MyShare> {
   const res: MyShare = { mine: 0, rows: [], unassigned: 0 };
   if (!assignees) return res;
   const wanted = new Set(await Promise.all(ids.map((i) => digest(ruleId, i))));
@@ -85,6 +108,20 @@ export async function myShare(assignees: Assignees | null | undefined, ruleId: s
     if (wanted.has(h)) {
       res.mine += v.n;
       for (const r of v.rows) if (!res.rows.includes(r)) res.rows.push(r);
+    }
+  }
+  // Tareas traspasadas: la fila deja de ser del primer nombre y pasa a quien la tiene ahora.
+  for (const [row, chain] of Object.entries(chains ?? {})) {
+    const level = Math.min(handoffs?.[Number(row)] ?? 0, chain.length - 1);
+    if (level <= 0) continue;
+    const n = Number(row);
+    if (wanted.has(chain[0])) {
+      res.mine = Math.max(0, res.mine - 1);
+      res.rows = res.rows.filter((r) => r !== n);
+    }
+    if (wanted.has(chain[level])) {
+      res.mine += 1;
+      if (!res.rows.includes(n)) res.rows.push(n);
     }
   }
   res.rows.sort((a, b) => a - b);

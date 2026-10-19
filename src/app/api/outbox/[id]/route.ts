@@ -20,6 +20,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const body = bodySchema.safeParse(await req.json().catch(() => null));
   if (!body.success) return NextResponse.json({ error: 'invalid_body' }, { status: 400 });
 
+  // Solo si el correo es mío por RLS: de mi empresa, o uno que me toca enviar a mí en un proyecto compartido.
+  const { data: visible } = await ctx.supabase.from('email_outbox').select('id').eq('id', id).in('status', ['pending', 'drafted']).maybeSingle();
+  if (!visible) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+
   const { data, error } = await createAdminClient()
     .from('email_outbox')
     .update({
@@ -34,7 +38,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       problem: null,
     })
     .eq('id', id)
-    .eq('company_id', ctx.companyId)
     .in('status', ['pending', 'drafted'])
     .select('id');
   if (error) return NextResponse.json({ error: 'db_error' }, { status: 500 });

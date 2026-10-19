@@ -6,6 +6,7 @@ interface Member {
   id: string;
   email: string;
   since: string;
+  notify: 'assigned' | 'all';
 }
 interface Invitation {
   id: string;
@@ -65,6 +66,20 @@ export function ShareDialog({ projectId, projectName, onClose }: { projectId: st
     await load();
   }
 
+  async function setNotify(id: string, notify: 'assigned' | 'all') {
+    setError(null);
+    setMembers((ms) => ms.map((m) => (m.id === id ? { ...m, notify } : m)));
+    const res = await fetch(`/api/projects/${projectId}/share`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, notify }),
+    });
+    if (!res.ok) {
+      setError('No se pudo guardar el cambio. Inténtalo de nuevo.');
+      await load();
+    }
+  }
+
   async function remove(kind: 'member' | 'invitation', id: string) {
     setError(null);
     const res = await fetch(`/api/projects/${projectId}/share`, {
@@ -83,8 +98,10 @@ export function ShareDialog({ projectId, projectName, onClose }: { projectId: st
     <dialog ref={dialogRef} className="dialog" onClose={onClose} aria-labelledby="share-title">
       <h2 id="share-title">Compartir «{projectName}»</h2>
       <p className="muted">
-        La persona invitada verá este proyecto en su Dashboard, junto con sus alertas y estadísticas. Solo podrá mirar:
-        no cambia nada, no ve tus reglas ni tus correos pendientes, y los archivos siguen en tu Drive o en tu ordenador.
+        La persona invitada verá este proyecto en su Dashboard, con sus alertas y estadísticas. Solo podrá mirar:
+        no cambia tus reglas ni ve tus archivos, que siguen en tu Drive o en tu ordenador. Tú eliges qué avisos le llegan:
+        solo los suyos (según la columna de responsable de cada regla) o todos. Las reglas marcadas «para todo el proyecto»
+        llegan siempre a todos. Si es responsable de un correo, lo verá también en sus correos pendientes.
       </p>
 
       <form onSubmit={invite} className="share-form">
@@ -120,6 +137,14 @@ export function ShareDialog({ projectId, projectName, onClose }: { projectId: st
           {members.map((m) => (
             <li key={m.id}>
               <span className="grow">{m.email}</span>
+              <select
+                aria-label={`Avisos de ${m.email}`}
+                value={m.notify}
+                onChange={(e) => void setNotify(m.id, e.target.value as 'assigned' | 'all')}
+              >
+                <option value="assigned">Solo los suyos</option>
+                <option value="all">Todos los avisos</option>
+              </select>
               <button type="button" className="btn ghost-line" onClick={() => void remove('member', m.id)}>
                 Quitar acceso
               </button>

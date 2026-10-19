@@ -526,7 +526,11 @@ def check_rule(raw: dict) -> tuple[Optional[Rule], str]:
                         return None, f"correo: {label} vacío o demasiado largo"
                 if mode not in ("per_row", "summary"):
                     return None, f"correo: modo desconocido «{str(mode)[:20]}»"
-                emails.append({"from": sender, "to": to, "cc": cc, "subject": subject, "body": body, "mode": mode})
+                sc = a.get("senderColumn")
+                if sc is not None and (not isinstance(sc, str) or not 1 <= len(sc.strip()) <= 200):
+                    return None, "correo: la columna de remitente no es válida"
+                emails.append({"from": sender, "to": to, "cc": cc, "subject": subject, "body": body, "mode": mode,
+                               **({"sender_column": sc.strip()} if sc else {})})
                 continue
             if kind != "alert":
                 return None, f"tipo de acción «{str(kind)[:20]}» no soportado por esta versión del agente"
@@ -637,6 +641,8 @@ def build_outputs(rule: Rule, evaluation: MultiSheetEvaluation, previous: dict[s
     columns: list[str] = []
     for em in rule.emails:
         columns += [c for c in email_render.referenced_columns([em["to"], em.get("cc", ""), em["subject"], em["body"]]) if c not in columns]
+        if em.get("sender_column") and em["sender_column"] not in columns:
+            columns.append(em["sender_column"])
 
     for sheet in evaluation.sheets:
         key = sheet.sheet_name or ""
@@ -648,11 +654,13 @@ def build_outputs(rule: Rule, evaluation: MultiSheetEvaluation, previous: dict[s
             continue
         refs = sheet.matched_rows[:200]
         assignees: dict = {}
+        chains: dict = {}
         table_for_assign = tables.get(sheet.sheet_name)
         if rule.assign_column and table_for_assign is not None and rule.assign_column in table_for_assign.headers:
             wanted_rows = set(sheet.matched_rows)
-            assignees = assign_mod.build_assignees(
-                rule.id, [(r.number, r.values.get(rule.assign_column)) for r in table_for_assign.rows if r.number in wanted_rows])
+            pairs = [(r.number, r.values.get(rule.assign_column)) for r in table_for_assign.rows if r.number in wanted_rows]
+            assignees = assign_mod.build_assignees(rule.id, pairs)
+            chains = assign_mod.build_chains(rule.id, [p for p in pairs if p[0] in set(refs)])
         for action in rule.actions:
             alerts.append({
                 "sheet": sheet.sheet_name,
@@ -664,6 +672,7 @@ def build_outputs(rule: Rule, evaluation: MultiSheetEvaluation, previous: dict[s
                 "count": sheet.matched_count,
                 "rows": refs,
                 **({"assignees": assignees} if assignees else {}),
+                **({"chains": chains} if chains else {}),
                 **({"template": rule.template_id} if rule.template_id else {}),
             })
         table = tables.get(sheet.sheet_name)

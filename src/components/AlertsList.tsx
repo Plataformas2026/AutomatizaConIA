@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { myShare, personalize, type MyShare } from '@/lib/assign/assign';
 import { AlertDetail } from './alerts/AlertDetail';
 import { FillDialog } from './alerts/FillDialog';
+import { isRelevant } from '@/lib/alerts/relevance';
 import { createClient } from '@/lib/supabase/client';
 import { useAlerts, type AlertRow } from './AlertsProvider';
 import { IconBell, IconCheck, IconFolder, IconTable } from './Icons';
@@ -23,7 +24,9 @@ export function AlertsList({
 }) {
   const [alerts, setAlerts] = useState<AlertRow[]>(initial);
   const [filter, setFilter] = useState<string>('all');
-  const { adjustUnread, refreshUnread, onNewAlert, unread } = useAlerts();
+  const { refreshUnread, onNewAlert, onAlertChange, unread, markRead, isUnreadFor, notify } = useAlerts();
+  const [relevant, setRelevant] = useState<Set<string>>(new Set());
+  const [onlyMineAlerts, setOnlyMineAlerts] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [shares, setShares] = useState<Record<string, MyShare>>({});
   const [filling, setFilling] = useState<AlertRow | null>(null);
@@ -36,7 +39,7 @@ export function AlertsList({
     void (async () => {
       const next: Record<string, MyShare> = {};
       for (const a of alerts) {
-        if (a.rule_id && a.assignees && Object.keys(a.assignees).length) next[a.id] = await myShare(a.assignees, a.rule_id, me);
+        if (a.rule_id && a.assignees && Object.keys(a.assignees).length) next[a.id] = await myShare(a.assignees, a.rule_id, me, a.chains, notify.handoffs[`${a.rule_id}|${a.sheet_name ?? ''}`]);
       }
       if (alive) setShares(next);
     })();
@@ -44,7 +47,31 @@ export function AlertsList({
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [alerts, meKey]);
+  }, [alerts, meKey, notify]);
+
+  // Qué alertas me tocan (las de mi empresa, las marcadas para todos y las que tienen filas mías).
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const set = new Set<string>();
+      for (const a of alerts) if (await isRelevant(a, notify)) set.add(a.id);
+      if (alive) setRelevant(set);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [alerts, notify]);
+
+  // Cambios en alertas que ya están (una tarea que pasa de manos, un descarte).
+  useEffect(
+    () =>
+      onAlertChange((a) =>
+        setAlerts((prev) =>
+          a.status === 'dismissed' ? prev.filter((p) => p.id !== a.id) : prev.map((p) => (p.id === a.id ? { ...p, ...a, project_name: p.project_name, shared: p.shared } : p)),
+        ),
+      ),
+    [onAlertChange],
+  );
 
   // Las alertas nuevas llegan por la suscripción única del proveedor.
   useEffect(
@@ -55,40 +82,36 @@ export function AlertsList({
     [onNewAlert],
   );
 
-  async function setStatus(alert: AlertRow, status: 'read' | 'dismissed') {
+  async function setRead(alert: AlertRow) {
+    setError(null);
+    if (!(await markRead([alert.id]))) setError('No se pudo actualizar la alerta. Inténtalo de nuevo.');
+  }
+
+  async function dismiss(alert: AlertRow) {
     setError(null);
     const { error: dbError } = await createClient()
       .from('alerts')
-      .update({ status, read_at: new Date().toISOString() })
+      .update({ status: 'dismissed', read_at: new Date().toISOString() })
       .eq('id', alert.id);
     if (dbError) {
       setError('No se pudo actualizar la alerta. Inténtalo de nuevo.');
       return;
     }
-    if (alert.status === 'open') adjustUnread(-1);
-    setAlerts((prev) =>
-      status === 'dismissed'
-        ? prev.filter((a) => a.id !== alert.id)
-        : prev.map((a) => (a.id === alert.id ? { ...a, status } : a)),
-    );
+    setAlerts((prev) => prev.filter((a) => a.id !== alert.id));
+    await refreshUnread();
   }
 
   async function markAllRead() {
     setError(null);
-    const { error: dbError } = await createClient()
-      .from('alerts')
-      .update({ status: 'read', read_at: new Date().toISOString() })
-      .eq('status', 'open');
-    if (dbError) {
-      setError('No se pudieron marcar las alertas. Inténtalo de nuevo.');
-      return;
-    }
-    setAlerts((prev) => prev.map((a) => (a.status === 'open' && !a.shared ? { ...a, status: 'read' } : a)));
-    await refreshUnread();
+    const ids = alerts.filter((a) => relevant.has(a.id) && isUnreadFor(a)).map((a) => a.id);
+    if (!(await markRead(ids))) setError('No se pudieron marcar las alertas. Inténtalo de nuevo.');
   }
 
-  const visible = alerts.filter((a) =>
-    filter === 'all' ? true : filter === 'none' ? !a.project_id : a.project_id === filter,
+  const hasOthers = alerts.some((a) => !relevant.has(a.id));
+  const visible = alerts.filter(
+    (a) =>
+      (filter === 'all' ? true : filter === 'none' ? !a.project_id : a.project_id === filter) &&
+      (!onlyMineAlerts || relevant.has(a.id)),
   );
 
   if (!alerts.length) {
@@ -117,6 +140,12 @@ export function AlertsList({
         )}
       </div>
       {error && <p className="err">{error}</p>}
+      {hasOthers && (
+        <label className="choice">
+          <input type="checkbox" checked={onlyMineAlerts} onChange={(e) => setOnlyMineAlerts(e.target.checked)} />
+          <span>Solo las que me corresponden</span>
+        </label>
+      )}
       {projects.length > 0 && (
         <label className="scope-select">
           <span className="field-title">Proyecto</span>
@@ -135,7 +164,7 @@ export function AlertsList({
 
       <ul className="alert-list">
         {visible.map((a) => (
-          <li key={a.id} className={`alert-item sev-${a.severity} ${a.status === 'read' ? 'is-read' : 'is-open'}`}>
+          <li key={a.id} className={`alert-item sev-${a.severity} ${isUnreadFor(a) ? 'is-open' : 'is-read'}`}>
             <span className="alert-sev" title={SEVERITY_LABEL[a.severity]}>
               <IconBell size={18} />
             </span>
@@ -158,6 +187,7 @@ export function AlertsList({
                 )}
                 {a.shared && <span className="tag tag-count">Compartida contigo</span>}
                 <span className="tag tag-rule">Regla «{a.rule_name}»</span>
+                {a.audience === 'everyone' && a.shared && <span className="tag tag-count">Para todo el proyecto</span>}
                 {shares[a.id] && shares[a.id].unassigned > 0 && (
                   <span className="tag tag-count">{shares[a.id].unassigned} sin responsable</span>
                 )}
@@ -180,13 +210,13 @@ export function AlertsList({
                   Rellenar
                 </button>
               )}
-              {!a.shared && a.status === 'open' && (
-                <button className="btn" onClick={() => setStatus(a, 'read')}>
+              {isUnreadFor(a) && (
+                <button className="btn" onClick={() => void setRead(a)}>
                   Marcar leída
                 </button>
               )}
               {!a.shared && (
-                <button className="btn ghost-line" onClick={() => setStatus(a, 'dismissed')}>
+                <button className="btn ghost-line" onClick={() => void dismiss(a)}>
                   Descartar
                 </button>
               )}

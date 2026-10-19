@@ -32,6 +32,8 @@ class Shared(unittest.TestCase):
         for c in cases:
             rows = [{"rowNumber": r["rowNumber"], "values": {k: revive(v) for k, v in r["values"].items()}} for r in c["rows"]]
             action = {"from": "", "mode": "per_row", **c["action"]}
+            if "senderColumn" in action:  # el agente lo guarda como sender_column
+                action["sender_column"] = action.pop("senderColumn")
             got = er.build_emails(action, RULE, c["meta"], rows, c["headers"])
             self.assertEqual(got, c["expected"], c["name"])
 

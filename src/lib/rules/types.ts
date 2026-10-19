@@ -101,6 +101,8 @@ export const alertActionSchema = z.object({
   assignColumn: z.string().trim().min(1).max(200).optional(),
   /** Plantilla (creada por el administrador) que se rellena con los datos de la fila al pulsar «Rellenar». */
   templateId: z.string().uuid().optional(),
+  /** A quién le llega: solo a quien le toque por la columna de responsable, o a todas las personas del proyecto. */
+  audience: z.enum(['assigned', 'everyone']).default('assigned'),
 });
 
 /** Correo de Outlook. `to`, `subject` y `body` admiten {col:Columna} y las variables de las alertas.
@@ -117,6 +119,10 @@ export const emailActionSchema = z.object({
   body: z.string().trim().min(1).max(4000),
   /** per_row: un correo por fila que cumple la condición · summary: uno solo con el resumen. */
   mode: z.enum(['per_row', 'summary']).default('per_row'),
+  /** Columna con quién tiene que mandar cada correo («Ana» o «Ana / Luis»: el primero lo manda, el resto es reserva). */
+  senderColumn: z.string().trim().min(1).max(200).optional(),
+  /** A quién le llega: solo a su responsable, o a todas las personas del proyecto. */
+  audience: z.enum(['assigned', 'everyone']).default('assigned'),
 });
 
 export const actionSchema = z.discriminatedUnion('type', [alertActionSchema, emailActionSchema]);

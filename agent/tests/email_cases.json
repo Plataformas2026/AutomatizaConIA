@@ -1,747 +1,905 @@
 [
-  {
-    "name": "por fila",
-    "action": {
-      "type": "email",
-      "to": "{col:Email}",
-      "subject": "Factura {col:Nº} pendiente",
-      "body": "Hola {col:Cliente}, debes {col:Importe} desde {col:Vence}.\nArchivo {file}, hoja {sheet}, regla {rule}, {count} filas, fila {rows}."
-    },
-    "meta": {
-      "fileName": "Facturas.xlsx",
-      "ruleName": "Vencidas",
-      "sheetName": "Enero",
-      "columnName": "Estado",
-      "count": 3
-    },
-    "headers": [
-      "Email",
-      "Nº",
-      "Cliente",
-      "Importe",
-      "Vence",
-      "Estado"
-    ],
-    "rows": [
-      {
-        "rowNumber": 2,
-        "values": {
-          "Email": "ana@x.com",
-          "Nº": 17,
-          "Cliente": "Ana",
-          "Importe": 1234.5,
-          "Vence": {
-            "$date": "2026-10-09T00:00:00Z"
-          }
-        }
-      },
-      {
-        "rowNumber": 5,
-        "values": {
-          "Email": "luis@y.es; marta@y.es",
-          "Nº": 18,
-          "Cliente": "Luis",
-          "Importe": 12345.678,
-          "Vence": {
-            "$date": "2026-10-08T23:58:00Z"
-          }
-        }
-      },
-      {
-        "rowNumber": 9,
-        "values": {
-          "Email": "mal",
-          "Nº": 19,
-          "Cliente": "Eva  Pérez",
-          "Importe": 0.125,
-          "Vence": "2026-12-01"
-        }
-      },
-      {
-        "rowNumber": 11,
-        "values": {
-          "Email": "z@z.com",
-          "Nº": 20,
-          "Cliente": true,
-          "Importe": -1000000,
-          "Vence": null
-        }
-      },
-      {
-        "rowNumber": 12,
-        "values": {
-          "Email": "q@q.com",
-          "Nº": "x\r\nSubject: hola",
-          "Cliente": "Línea1\nLínea2",
-          "Importe": "12,5 €",
-          "Vence": 5
-        }
-      }
-    ],
-    "expected": [
-      {
-        "sheet": "Enero",
-        "row": 2,
-        "key": "48404f94c81004f0d5c1136a3730bec3655afc82",
-        "from": "",
-        "to": "ana@x.com",
-        "cc": "",
-        "subject": "Factura 17 pendiente",
-        "body": "Hola Ana, debes 1234,5 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 2.",
-        "problem": null
-      },
-      {
-        "sheet": "Enero",
-        "row": 5,
-        "key": "38b9e3429af8f9f8e7ab7e63893a29223ee75d2c",
-        "from": "",
-        "to": "luis@y.es; marta@y.es",
-        "cc": "",
-        "subject": "Factura 18 pendiente",
-        "body": "Hola Luis, debes 12.345,68 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 5.",
-        "problem": null
-      },
-      {
-        "sheet": "Enero",
-        "row": 9,
-        "key": "67cb4446a19cd24027bc92307d02135075dc6855",
-        "from": "",
-        "to": "mal",
-        "cc": "",
-        "subject": "Factura 19 pendiente",
-        "body": "Hola Eva Pérez, debes 0,13 desde 2026-12-01.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 9.",
-        "problem": "El destinatario «mal» no es una dirección de correo válida."
-      },
-      {
-        "sheet": "Enero",
-        "row": 11,
-        "key": "d3204e4a17b6d8c11a2961c2778703963604e064",
-        "from": "",
-        "to": "z@z.com",
-        "cc": "",
-        "subject": "Factura 20 pendiente",
-        "body": "Hola Sí, debes -1.000.000 desde .\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 11.",
-        "problem": null
-      },
-      {
-        "sheet": "Enero",
-        "row": 12,
-        "key": "90f3dcea22e9fb4db1ec7bc7c487bb618cd1cbfa",
-        "from": "",
-        "to": "q@q.com",
-        "cc": "",
-        "subject": "Factura x Subject: hola pendiente",
-        "body": "Hola Línea1 Línea2, debes 12,5 € desde 5.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 12.",
-        "problem": null
-      }
-    ]
+ {
+  "name": "por fila",
+  "action": {
+   "type": "email",
+   "to": "{col:Email}",
+   "subject": "Factura {col:Nº} pendiente",
+   "body": "Hola {col:Cliente}, debes {col:Importe} desde {col:Vence}.\nArchivo {file}, hoja {sheet}, regla {rule}, {count} filas, fila {rows}."
   },
-  {
-    "name": "resumen",
-    "action": {
-      "type": "email",
-      "to": "jefe@x.com",
-      "subject": "{count} facturas ({col:Cliente})",
-      "body": "Clientes: {col:Cliente}\nImportes: {col:Importe}\nFilas {rows} de {column}",
-      "mode": "summary"
-    },
-    "meta": {
-      "fileName": "Facturas.xlsx",
-      "ruleName": "Vencidas",
-      "sheetName": "Enero",
-      "columnName": "Estado",
-      "count": 3
-    },
-    "headers": [
-      "Email",
-      "Nº",
-      "Cliente",
-      "Importe",
-      "Vence",
-      "Estado"
-    ],
-    "rows": [
-      {
-        "rowNumber": 2,
-        "values": {
-          "Email": "ana@x.com",
-          "Nº": 17,
-          "Cliente": "Ana",
-          "Importe": 1234.5,
-          "Vence": {
-            "$date": "2026-10-09T00:00:00Z"
-          }
-        }
-      },
-      {
-        "rowNumber": 5,
-        "values": {
-          "Email": "luis@y.es; marta@y.es",
-          "Nº": 18,
-          "Cliente": "Luis",
-          "Importe": 12345.678,
-          "Vence": {
-            "$date": "2026-10-08T23:58:00Z"
-          }
-        }
-      },
-      {
-        "rowNumber": 9,
-        "values": {
-          "Email": "mal",
-          "Nº": 19,
-          "Cliente": "Eva  Pérez",
-          "Importe": 0.125,
-          "Vence": "2026-12-01"
-        }
-      },
-      {
-        "rowNumber": 11,
-        "values": {
-          "Email": "z@z.com",
-          "Nº": 20,
-          "Cliente": true,
-          "Importe": -1000000,
-          "Vence": null
-        }
-      },
-      {
-        "rowNumber": 12,
-        "values": {
-          "Email": "q@q.com",
-          "Nº": "x\r\nSubject: hola",
-          "Cliente": "Línea1\nLínea2",
-          "Importe": "12,5 €",
-          "Vence": 5
-        }
-      }
-    ],
-    "expected": [
-      {
-        "sheet": "Enero",
-        "row": null,
-        "key": "7b51f064fd99eb9b61cdb4cdb5bdc7436806af32",
-        "from": "",
-        "to": "jefe@x.com",
-        "cc": "",
-        "subject": "3 facturas (Ana, Luis, Eva Pérez, Sí, Línea1 Línea2)",
-        "body": "Clientes: Ana, Luis, Eva Pérez, Sí, Línea1 Línea2\nImportes: 1234,5, 12.345,68, 0,13, -1.000.000, 12,5 €\nFilas 2, 5, 9, 11, 12 de Estado",
-        "problem": null
-      }
-    ]
+  "meta": {
+   "fileName": "Facturas.xlsx",
+   "ruleName": "Vencidas",
+   "sheetName": "Enero",
+   "columnName": "Estado",
+   "count": 3
   },
-  {
-    "name": "remitente y sin variables de columna",
-    "action": {
-      "type": "email",
-      "to": "a@b.com",
-      "subject": "Aviso",
-      "body": "Hay {count} casos en {sheet}",
-      "from": "yo@x.com"
-    },
-    "meta": {
-      "fileName": "Facturas.xlsx",
-      "ruleName": "Vencidas",
-      "sheetName": "Enero",
-      "columnName": "Estado",
-      "count": 3
-    },
-    "headers": [
-      "Email",
-      "Nº",
-      "Cliente",
-      "Importe",
-      "Vence",
-      "Estado"
-    ],
-    "rows": [
-      {
-        "rowNumber": 2,
-        "values": {
-          "Email": "ana@x.com",
-          "Nº": 17,
-          "Cliente": "Ana",
-          "Importe": 1234.5,
-          "Vence": {
-            "$date": "2026-10-09T00:00:00Z"
-          }
-        }
-      },
-      {
-        "rowNumber": 5,
-        "values": {
-          "Email": "luis@y.es; marta@y.es",
-          "Nº": 18,
-          "Cliente": "Luis",
-          "Importe": 12345.678,
-          "Vence": {
-            "$date": "2026-10-08T23:58:00Z"
-          }
-        }
-      },
-      {
-        "rowNumber": 9,
-        "values": {
-          "Email": "mal",
-          "Nº": 19,
-          "Cliente": "Eva  Pérez",
-          "Importe": 0.125,
-          "Vence": "2026-12-01"
-        }
-      },
-      {
-        "rowNumber": 11,
-        "values": {
-          "Email": "z@z.com",
-          "Nº": 20,
-          "Cliente": true,
-          "Importe": -1000000,
-          "Vence": null
-        }
-      },
-      {
-        "rowNumber": 12,
-        "values": {
-          "Email": "q@q.com",
-          "Nº": "x\r\nSubject: hola",
-          "Cliente": "Línea1\nLínea2",
-          "Importe": "12,5 €",
-          "Vence": 5
-        }
-      }
-    ],
-    "expected": [
-      {
-        "sheet": "Enero",
-        "row": 2,
-        "key": "33dbf30bfe98c608d043f1552ef59ba0b3ac5c2c",
-        "from": "yo@x.com",
-        "to": "a@b.com",
-        "cc": "",
-        "subject": "Aviso",
-        "body": "Hay 3 casos en Enero",
-        "problem": null
-      }
-    ]
+  "headers": [
+   "Email",
+   "Nº",
+   "Cliente",
+   "Importe",
+   "Vence",
+   "Estado"
+  ],
+  "rows": [
+   {
+    "rowNumber": 2,
+    "values": {
+     "Email": "ana@x.com",
+     "Nº": 17,
+     "Cliente": "Ana",
+     "Importe": 1234.5,
+     "Vence": {
+      "$date": "2026-10-09T00:00:00Z"
+     }
+    }
+   },
+   {
+    "rowNumber": 5,
+    "values": {
+     "Email": "luis@y.es; marta@y.es",
+     "Nº": 18,
+     "Cliente": "Luis",
+     "Importe": 12345.678,
+     "Vence": {
+      "$date": "2026-10-08T23:58:00Z"
+     }
+    }
+   },
+   {
+    "rowNumber": 9,
+    "values": {
+     "Email": "mal",
+     "Nº": 19,
+     "Cliente": "Eva  Pérez",
+     "Importe": 0.125,
+     "Vence": "2026-12-01"
+    }
+   },
+   {
+    "rowNumber": 11,
+    "values": {
+     "Email": "z@z.com",
+     "Nº": 20,
+     "Cliente": true,
+     "Importe": -1000000,
+     "Vence": null
+    }
+   },
+   {
+    "rowNumber": 12,
+    "values": {
+     "Email": "q@q.com",
+     "Nº": "x\r\nSubject: hola",
+     "Cliente": "Línea1\nLínea2",
+     "Importe": "12,5 €",
+     "Vence": 5
+    }
+   }
+  ],
+  "expected": [
+   {
+    "sheet": "Enero",
+    "row": 2,
+    "key": "48404f94c81004f0d5c1136a3730bec3655afc82",
+    "from": "",
+    "to": "ana@x.com",
+    "cc": "",
+    "subject": "Factura 17 pendiente",
+    "body": "Hola Ana, debes 1234,5 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 2.",
+    "problem": null
+   },
+   {
+    "sheet": "Enero",
+    "row": 5,
+    "key": "38b9e3429af8f9f8e7ab7e63893a29223ee75d2c",
+    "from": "",
+    "to": "luis@y.es; marta@y.es",
+    "cc": "",
+    "subject": "Factura 18 pendiente",
+    "body": "Hola Luis, debes 12.345,68 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 5.",
+    "problem": null
+   },
+   {
+    "sheet": "Enero",
+    "row": 9,
+    "key": "67cb4446a19cd24027bc92307d02135075dc6855",
+    "from": "",
+    "to": "mal",
+    "cc": "",
+    "subject": "Factura 19 pendiente",
+    "body": "Hola Eva Pérez, debes 0,13 desde 2026-12-01.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 9.",
+    "problem": "El destinatario «mal» no es una dirección de correo válida."
+   },
+   {
+    "sheet": "Enero",
+    "row": 11,
+    "key": "d3204e4a17b6d8c11a2961c2778703963604e064",
+    "from": "",
+    "to": "z@z.com",
+    "cc": "",
+    "subject": "Factura 20 pendiente",
+    "body": "Hola Sí, debes -1.000.000 desde .\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 11.",
+    "problem": null
+   },
+   {
+    "sheet": "Enero",
+    "row": 12,
+    "key": "90f3dcea22e9fb4db1ec7bc7c487bb618cd1cbfa",
+    "from": "",
+    "to": "q@q.com",
+    "cc": "",
+    "subject": "Factura x Subject: hola pendiente",
+    "body": "Hola Línea1 Línea2, debes 12,5 € desde 5.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 12.",
+    "problem": null
+   }
+  ]
+ },
+ {
+  "name": "resumen",
+  "action": {
+   "type": "email",
+   "to": "jefe@x.com",
+   "subject": "{count} facturas ({col:Cliente})",
+   "body": "Clientes: {col:Cliente}\nImportes: {col:Importe}\nFilas {rows} de {column}",
+   "mode": "summary"
   },
-  {
-    "name": "columna desaparecida",
-    "action": {
-      "type": "email",
-      "to": "{col:Email}",
-      "subject": "Factura {col:Nº} pendiente",
-      "body": "Hola {col:Cliente}, debes {col:Importe} desde {col:Vence}.\nArchivo {file}, hoja {sheet}, regla {rule}, {count} filas, fila {rows}."
-    },
-    "meta": {
-      "fileName": "Facturas.xlsx",
-      "ruleName": "Vencidas",
-      "sheetName": "Enero",
-      "columnName": "Estado",
-      "count": 3
-    },
-    "headers": [
-      "Email",
-      "Nº",
-      "Importe",
-      "Vence",
-      "Estado"
-    ],
-    "rows": [
-      {
-        "rowNumber": 2,
-        "values": {
-          "Email": "ana@x.com",
-          "Nº": 17,
-          "Cliente": "Ana",
-          "Importe": 1234.5,
-          "Vence": {
-            "$date": "2026-10-09T00:00:00Z"
-          }
-        }
-      },
-      {
-        "rowNumber": 5,
-        "values": {
-          "Email": "luis@y.es; marta@y.es",
-          "Nº": 18,
-          "Cliente": "Luis",
-          "Importe": 12345.678,
-          "Vence": {
-            "$date": "2026-10-08T23:58:00Z"
-          }
-        }
-      },
-      {
-        "rowNumber": 9,
-        "values": {
-          "Email": "mal",
-          "Nº": 19,
-          "Cliente": "Eva  Pérez",
-          "Importe": 0.125,
-          "Vence": "2026-12-01"
-        }
-      },
-      {
-        "rowNumber": 11,
-        "values": {
-          "Email": "z@z.com",
-          "Nº": 20,
-          "Cliente": true,
-          "Importe": -1000000,
-          "Vence": null
-        }
-      },
-      {
-        "rowNumber": 12,
-        "values": {
-          "Email": "q@q.com",
-          "Nº": "x\r\nSubject: hola",
-          "Cliente": "Línea1\nLínea2",
-          "Importe": "12,5 €",
-          "Vence": 5
-        }
-      }
-    ],
-    "expected": [
-      {
-        "sheet": "Enero",
-        "row": 2,
-        "key": "48404f94c81004f0d5c1136a3730bec3655afc82",
-        "from": "",
-        "to": "ana@x.com",
-        "cc": "",
-        "subject": "Factura 17 pendiente",
-        "body": "Hola Ana, debes 1234,5 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 2.",
-        "problem": "La columna «Cliente» ya no existe en el archivo."
-      },
-      {
-        "sheet": "Enero",
-        "row": 5,
-        "key": "38b9e3429af8f9f8e7ab7e63893a29223ee75d2c",
-        "from": "",
-        "to": "luis@y.es; marta@y.es",
-        "cc": "",
-        "subject": "Factura 18 pendiente",
-        "body": "Hola Luis, debes 12.345,68 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 5.",
-        "problem": "La columna «Cliente» ya no existe en el archivo."
-      },
-      {
-        "sheet": "Enero",
-        "row": 9,
-        "key": "67cb4446a19cd24027bc92307d02135075dc6855",
-        "from": "",
-        "to": "mal",
-        "cc": "",
-        "subject": "Factura 19 pendiente",
-        "body": "Hola Eva Pérez, debes 0,13 desde 2026-12-01.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 9.",
-        "problem": "La columna «Cliente» ya no existe en el archivo."
-      },
-      {
-        "sheet": "Enero",
-        "row": 11,
-        "key": "d3204e4a17b6d8c11a2961c2778703963604e064",
-        "from": "",
-        "to": "z@z.com",
-        "cc": "",
-        "subject": "Factura 20 pendiente",
-        "body": "Hola Sí, debes -1.000.000 desde .\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 11.",
-        "problem": "La columna «Cliente» ya no existe en el archivo."
-      },
-      {
-        "sheet": "Enero",
-        "row": 12,
-        "key": "90f3dcea22e9fb4db1ec7bc7c487bb618cd1cbfa",
-        "from": "",
-        "to": "q@q.com",
-        "cc": "",
-        "subject": "Factura x Subject: hola pendiente",
-        "body": "Hola Línea1 Línea2, debes 12,5 € desde 5.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 12.",
-        "problem": "La columna «Cliente» ya no existe en el archivo."
-      }
-    ]
+  "meta": {
+   "fileName": "Facturas.xlsx",
+   "ruleName": "Vencidas",
+   "sheetName": "Enero",
+   "columnName": "Estado",
+   "count": 3
   },
-  {
-    "name": "destinatarios multiples en resumen",
-    "action": {
-      "type": "email",
-      "to": "{col:Email}",
-      "subject": "Resumen",
-      "body": "{col:Email}",
-      "mode": "summary"
-    },
-    "meta": {
-      "fileName": "Facturas.xlsx",
-      "ruleName": "Vencidas",
-      "sheetName": "Enero",
-      "columnName": "Estado",
-      "count": 3
-    },
-    "headers": [
-      "Email",
-      "Nº",
-      "Cliente",
-      "Importe",
-      "Vence",
-      "Estado"
-    ],
-    "rows": [
-      {
-        "rowNumber": 2,
-        "values": {
-          "Email": "ana@x.com",
-          "Nº": 17,
-          "Cliente": "Ana",
-          "Importe": 1234.5,
-          "Vence": {
-            "$date": "2026-10-09T00:00:00Z"
-          }
-        }
-      },
-      {
-        "rowNumber": 5,
-        "values": {
-          "Email": "luis@y.es; marta@y.es",
-          "Nº": 18,
-          "Cliente": "Luis",
-          "Importe": 12345.678,
-          "Vence": {
-            "$date": "2026-10-08T23:58:00Z"
-          }
-        }
-      },
-      {
-        "rowNumber": 9,
-        "values": {
-          "Email": "mal",
-          "Nº": 19,
-          "Cliente": "Eva  Pérez",
-          "Importe": 0.125,
-          "Vence": "2026-12-01"
-        }
-      },
-      {
-        "rowNumber": 11,
-        "values": {
-          "Email": "z@z.com",
-          "Nº": 20,
-          "Cliente": true,
-          "Importe": -1000000,
-          "Vence": null
-        }
-      },
-      {
-        "rowNumber": 12,
-        "values": {
-          "Email": "q@q.com",
-          "Nº": "x\r\nSubject: hola",
-          "Cliente": "Línea1\nLínea2",
-          "Importe": "12,5 €",
-          "Vence": 5
-        }
-      }
-    ],
-    "expected": [
-      {
-        "sheet": "Enero",
-        "row": null,
-        "key": "4c464e09df98091e0226580b4d1de760efe5a502",
-        "from": "",
-        "to": "ana@x.com, luis@y.es; marta@y.es, mal, z@z.com, q@q.com",
-        "cc": "",
-        "subject": "Resumen",
-        "body": "ana@x.com, luis@y.es; marta@y.es, mal, z@z.com, q@q.com",
-        "problem": "El destinatario «ana@x.com, luis@y.es; marta@y.es, mal, z@z.com, q@q.com» no es una dirección de correo válida."
-      }
-    ]
+  "headers": [
+   "Email",
+   "Nº",
+   "Cliente",
+   "Importe",
+   "Vence",
+   "Estado"
+  ],
+  "rows": [
+   {
+    "rowNumber": 2,
+    "values": {
+     "Email": "ana@x.com",
+     "Nº": 17,
+     "Cliente": "Ana",
+     "Importe": 1234.5,
+     "Vence": {
+      "$date": "2026-10-09T00:00:00Z"
+     }
+    }
+   },
+   {
+    "rowNumber": 5,
+    "values": {
+     "Email": "luis@y.es; marta@y.es",
+     "Nº": 18,
+     "Cliente": "Luis",
+     "Importe": 12345.678,
+     "Vence": {
+      "$date": "2026-10-08T23:58:00Z"
+     }
+    }
+   },
+   {
+    "rowNumber": 9,
+    "values": {
+     "Email": "mal",
+     "Nº": 19,
+     "Cliente": "Eva  Pérez",
+     "Importe": 0.125,
+     "Vence": "2026-12-01"
+    }
+   },
+   {
+    "rowNumber": 11,
+    "values": {
+     "Email": "z@z.com",
+     "Nº": 20,
+     "Cliente": true,
+     "Importe": -1000000,
+     "Vence": null
+    }
+   },
+   {
+    "rowNumber": 12,
+    "values": {
+     "Email": "q@q.com",
+     "Nº": "x\r\nSubject: hola",
+     "Cliente": "Línea1\nLínea2",
+     "Importe": "12,5 €",
+     "Vence": 5
+    }
+   }
+  ],
+  "expected": [
+   {
+    "sheet": "Enero",
+    "row": null,
+    "key": "7b51f064fd99eb9b61cdb4cdb5bdc7436806af32",
+    "from": "",
+    "to": "jefe@x.com",
+    "cc": "",
+    "subject": "3 facturas (Ana, Luis, Eva Pérez, Sí, Línea1 Línea2)",
+    "body": "Clientes: Ana, Luis, Eva Pérez, Sí, Línea1 Línea2\nImportes: 1234,5, 12.345,68, 0,13, -1.000.000, 12,5 €\nFilas 2, 5, 9, 11, 12 de Estado",
+    "problem": null
+   }
+  ]
+ },
+ {
+  "name": "remitente y sin variables de columna",
+  "action": {
+   "type": "email",
+   "to": "a@b.com",
+   "subject": "Aviso",
+   "body": "Hay {count} casos en {sheet}",
+   "from": "yo@x.com"
   },
-  {
-    "name": "copia con problema",
-    "action": {
-      "type": "email",
-      "to": "{col:Email}",
-      "subject": "Factura {col:Nº} pendiente",
-      "body": "Hola {col:Cliente}, debes {col:Importe} desde {col:Vence}.\nArchivo {file}, hoja {sheet}, regla {rule}, {count} filas, fila {rows}.",
-      "cc": "jefe@x.com; {col:Cliente}"
-    },
-    "meta": {
-      "fileName": "Facturas.xlsx",
-      "ruleName": "Vencidas",
-      "sheetName": "Enero",
-      "columnName": "Estado",
-      "count": 3
-    },
-    "headers": [
-      "Email",
-      "Nº",
-      "Cliente",
-      "Importe",
-      "Vence",
-      "Estado"
-    ],
-    "rows": [
-      {
-        "rowNumber": 2,
-        "values": {
-          "Email": "ana@x.com",
-          "Nº": 17,
-          "Cliente": "Ana",
-          "Importe": 1234.5,
-          "Vence": {
-            "$date": "2026-10-09T00:00:00Z"
-          }
-        }
-      },
-      {
-        "rowNumber": 5,
-        "values": {
-          "Email": "luis@y.es; marta@y.es",
-          "Nº": 18,
-          "Cliente": "Luis",
-          "Importe": 12345.678,
-          "Vence": {
-            "$date": "2026-10-08T23:58:00Z"
-          }
-        }
-      },
-      {
-        "rowNumber": 9,
-        "values": {
-          "Email": "mal",
-          "Nº": 19,
-          "Cliente": "Eva  Pérez",
-          "Importe": 0.125,
-          "Vence": "2026-12-01"
-        }
-      },
-      {
-        "rowNumber": 11,
-        "values": {
-          "Email": "z@z.com",
-          "Nº": 20,
-          "Cliente": true,
-          "Importe": -1000000,
-          "Vence": null
-        }
-      },
-      {
-        "rowNumber": 12,
-        "values": {
-          "Email": "q@q.com",
-          "Nº": "x\r\nSubject: hola",
-          "Cliente": "Línea1\nLínea2",
-          "Importe": "12,5 €",
-          "Vence": 5
-        }
-      }
-    ],
-    "expected": [
-      {
-        "sheet": "Enero",
-        "row": 2,
-        "key": "48404f94c81004f0d5c1136a3730bec3655afc82",
-        "from": "",
-        "to": "ana@x.com",
-        "cc": "jefe@x.com; Ana",
-        "subject": "Factura 17 pendiente",
-        "body": "Hola Ana, debes 1234,5 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 2.",
-        "problem": "La copia «jefe@x.com; Ana» no es una dirección de correo válida."
-      },
-      {
-        "sheet": "Enero",
-        "row": 5,
-        "key": "38b9e3429af8f9f8e7ab7e63893a29223ee75d2c",
-        "from": "",
-        "to": "luis@y.es; marta@y.es",
-        "cc": "jefe@x.com; Luis",
-        "subject": "Factura 18 pendiente",
-        "body": "Hola Luis, debes 12.345,68 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 5.",
-        "problem": "La copia «jefe@x.com; Luis» no es una dirección de correo válida."
-      },
-      {
-        "sheet": "Enero",
-        "row": 9,
-        "key": "67cb4446a19cd24027bc92307d02135075dc6855",
-        "from": "",
-        "to": "mal",
-        "cc": "jefe@x.com; Eva Pérez",
-        "subject": "Factura 19 pendiente",
-        "body": "Hola Eva Pérez, debes 0,13 desde 2026-12-01.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 9.",
-        "problem": "El destinatario «mal» no es una dirección de correo válida."
-      },
-      {
-        "sheet": "Enero",
-        "row": 11,
-        "key": "d3204e4a17b6d8c11a2961c2778703963604e064",
-        "from": "",
-        "to": "z@z.com",
-        "cc": "jefe@x.com; Sí",
-        "subject": "Factura 20 pendiente",
-        "body": "Hola Sí, debes -1.000.000 desde .\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 11.",
-        "problem": "La copia «jefe@x.com; Sí» no es una dirección de correo válida."
-      },
-      {
-        "sheet": "Enero",
-        "row": 12,
-        "key": "90f3dcea22e9fb4db1ec7bc7c487bb618cd1cbfa",
-        "from": "",
-        "to": "q@q.com",
-        "cc": "jefe@x.com; Línea1 Línea2",
-        "subject": "Factura x Subject: hola pendiente",
-        "body": "Hola Línea1 Línea2, debes 12,5 € desde 5.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 12.",
-        "problem": "La copia «jefe@x.com; Línea1 Línea2» no es una dirección de correo válida."
-      }
-    ]
+  "meta": {
+   "fileName": "Facturas.xlsx",
+   "ruleName": "Vencidas",
+   "sheetName": "Enero",
+   "columnName": "Estado",
+   "count": 3
   },
-  {
-    "name": "copia válida de columna",
-    "action": {
-      "type": "email",
-      "to": "{col:Email}",
-      "subject": "Factura {col:Nº} pendiente",
-      "body": "Hola {col:Cliente}, debes {col:Importe} desde {col:Vence}.\nArchivo {file}, hoja {sheet}, regla {rule}, {count} filas, fila {rows}.",
-      "cc": "archivo@x.com"
-    },
-    "meta": {
-      "fileName": "Facturas.xlsx",
-      "ruleName": "Vencidas",
-      "sheetName": "Enero",
-      "columnName": "Estado",
-      "count": 3
-    },
-    "headers": [
-      "Email",
-      "Nº",
-      "Cliente",
-      "Importe",
-      "Vence",
-      "Estado"
-    ],
-    "rows": [
-      {
-        "rowNumber": 2,
-        "values": {
-          "Email": "ana@x.com",
-          "Nº": 17,
-          "Cliente": "Ana",
-          "Importe": 1234.5,
-          "Vence": {
-            "$date": "2026-10-09T00:00:00Z"
-          }
-        }
-      }
-    ],
-    "expected": [
-      {
-        "sheet": "Enero",
-        "row": 2,
-        "key": "48404f94c81004f0d5c1136a3730bec3655afc82",
-        "from": "",
-        "to": "ana@x.com",
-        "cc": "archivo@x.com",
-        "subject": "Factura 17 pendiente",
-        "body": "Hola Ana, debes 1234,5 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 2.",
-        "problem": null
-      }
+  "headers": [
+   "Email",
+   "Nº",
+   "Cliente",
+   "Importe",
+   "Vence",
+   "Estado"
+  ],
+  "rows": [
+   {
+    "rowNumber": 2,
+    "values": {
+     "Email": "ana@x.com",
+     "Nº": 17,
+     "Cliente": "Ana",
+     "Importe": 1234.5,
+     "Vence": {
+      "$date": "2026-10-09T00:00:00Z"
+     }
+    }
+   },
+   {
+    "rowNumber": 5,
+    "values": {
+     "Email": "luis@y.es; marta@y.es",
+     "Nº": 18,
+     "Cliente": "Luis",
+     "Importe": 12345.678,
+     "Vence": {
+      "$date": "2026-10-08T23:58:00Z"
+     }
+    }
+   },
+   {
+    "rowNumber": 9,
+    "values": {
+     "Email": "mal",
+     "Nº": 19,
+     "Cliente": "Eva  Pérez",
+     "Importe": 0.125,
+     "Vence": "2026-12-01"
+    }
+   },
+   {
+    "rowNumber": 11,
+    "values": {
+     "Email": "z@z.com",
+     "Nº": 20,
+     "Cliente": true,
+     "Importe": -1000000,
+     "Vence": null
+    }
+   },
+   {
+    "rowNumber": 12,
+    "values": {
+     "Email": "q@q.com",
+     "Nº": "x\r\nSubject: hola",
+     "Cliente": "Línea1\nLínea2",
+     "Importe": "12,5 €",
+     "Vence": 5
+    }
+   }
+  ],
+  "expected": [
+   {
+    "sheet": "Enero",
+    "row": 2,
+    "key": "33dbf30bfe98c608d043f1552ef59ba0b3ac5c2c",
+    "from": "yo@x.com",
+    "to": "a@b.com",
+    "cc": "",
+    "subject": "Aviso",
+    "body": "Hay 3 casos en Enero",
+    "problem": null
+   }
+  ]
+ },
+ {
+  "name": "columna desaparecida",
+  "action": {
+   "type": "email",
+   "to": "{col:Email}",
+   "subject": "Factura {col:Nº} pendiente",
+   "body": "Hola {col:Cliente}, debes {col:Importe} desde {col:Vence}.\nArchivo {file}, hoja {sheet}, regla {rule}, {count} filas, fila {rows}."
+  },
+  "meta": {
+   "fileName": "Facturas.xlsx",
+   "ruleName": "Vencidas",
+   "sheetName": "Enero",
+   "columnName": "Estado",
+   "count": 3
+  },
+  "headers": [
+   "Email",
+   "Nº",
+   "Importe",
+   "Vence",
+   "Estado"
+  ],
+  "rows": [
+   {
+    "rowNumber": 2,
+    "values": {
+     "Email": "ana@x.com",
+     "Nº": 17,
+     "Cliente": "Ana",
+     "Importe": 1234.5,
+     "Vence": {
+      "$date": "2026-10-09T00:00:00Z"
+     }
+    }
+   },
+   {
+    "rowNumber": 5,
+    "values": {
+     "Email": "luis@y.es; marta@y.es",
+     "Nº": 18,
+     "Cliente": "Luis",
+     "Importe": 12345.678,
+     "Vence": {
+      "$date": "2026-10-08T23:58:00Z"
+     }
+    }
+   },
+   {
+    "rowNumber": 9,
+    "values": {
+     "Email": "mal",
+     "Nº": 19,
+     "Cliente": "Eva  Pérez",
+     "Importe": 0.125,
+     "Vence": "2026-12-01"
+    }
+   },
+   {
+    "rowNumber": 11,
+    "values": {
+     "Email": "z@z.com",
+     "Nº": 20,
+     "Cliente": true,
+     "Importe": -1000000,
+     "Vence": null
+    }
+   },
+   {
+    "rowNumber": 12,
+    "values": {
+     "Email": "q@q.com",
+     "Nº": "x\r\nSubject: hola",
+     "Cliente": "Línea1\nLínea2",
+     "Importe": "12,5 €",
+     "Vence": 5
+    }
+   }
+  ],
+  "expected": [
+   {
+    "sheet": "Enero",
+    "row": 2,
+    "key": "48404f94c81004f0d5c1136a3730bec3655afc82",
+    "from": "",
+    "to": "ana@x.com",
+    "cc": "",
+    "subject": "Factura 17 pendiente",
+    "body": "Hola Ana, debes 1234,5 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 2.",
+    "problem": "La columna «Cliente» ya no existe en el archivo."
+   },
+   {
+    "sheet": "Enero",
+    "row": 5,
+    "key": "38b9e3429af8f9f8e7ab7e63893a29223ee75d2c",
+    "from": "",
+    "to": "luis@y.es; marta@y.es",
+    "cc": "",
+    "subject": "Factura 18 pendiente",
+    "body": "Hola Luis, debes 12.345,68 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 5.",
+    "problem": "La columna «Cliente» ya no existe en el archivo."
+   },
+   {
+    "sheet": "Enero",
+    "row": 9,
+    "key": "67cb4446a19cd24027bc92307d02135075dc6855",
+    "from": "",
+    "to": "mal",
+    "cc": "",
+    "subject": "Factura 19 pendiente",
+    "body": "Hola Eva Pérez, debes 0,13 desde 2026-12-01.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 9.",
+    "problem": "La columna «Cliente» ya no existe en el archivo."
+   },
+   {
+    "sheet": "Enero",
+    "row": 11,
+    "key": "d3204e4a17b6d8c11a2961c2778703963604e064",
+    "from": "",
+    "to": "z@z.com",
+    "cc": "",
+    "subject": "Factura 20 pendiente",
+    "body": "Hola Sí, debes -1.000.000 desde .\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 11.",
+    "problem": "La columna «Cliente» ya no existe en el archivo."
+   },
+   {
+    "sheet": "Enero",
+    "row": 12,
+    "key": "90f3dcea22e9fb4db1ec7bc7c487bb618cd1cbfa",
+    "from": "",
+    "to": "q@q.com",
+    "cc": "",
+    "subject": "Factura x Subject: hola pendiente",
+    "body": "Hola Línea1 Línea2, debes 12,5 € desde 5.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 12.",
+    "problem": "La columna «Cliente» ya no existe en el archivo."
+   }
+  ]
+ },
+ {
+  "name": "destinatarios multiples en resumen",
+  "action": {
+   "type": "email",
+   "to": "{col:Email}",
+   "subject": "Resumen",
+   "body": "{col:Email}",
+   "mode": "summary"
+  },
+  "meta": {
+   "fileName": "Facturas.xlsx",
+   "ruleName": "Vencidas",
+   "sheetName": "Enero",
+   "columnName": "Estado",
+   "count": 3
+  },
+  "headers": [
+   "Email",
+   "Nº",
+   "Cliente",
+   "Importe",
+   "Vence",
+   "Estado"
+  ],
+  "rows": [
+   {
+    "rowNumber": 2,
+    "values": {
+     "Email": "ana@x.com",
+     "Nº": 17,
+     "Cliente": "Ana",
+     "Importe": 1234.5,
+     "Vence": {
+      "$date": "2026-10-09T00:00:00Z"
+     }
+    }
+   },
+   {
+    "rowNumber": 5,
+    "values": {
+     "Email": "luis@y.es; marta@y.es",
+     "Nº": 18,
+     "Cliente": "Luis",
+     "Importe": 12345.678,
+     "Vence": {
+      "$date": "2026-10-08T23:58:00Z"
+     }
+    }
+   },
+   {
+    "rowNumber": 9,
+    "values": {
+     "Email": "mal",
+     "Nº": 19,
+     "Cliente": "Eva  Pérez",
+     "Importe": 0.125,
+     "Vence": "2026-12-01"
+    }
+   },
+   {
+    "rowNumber": 11,
+    "values": {
+     "Email": "z@z.com",
+     "Nº": 20,
+     "Cliente": true,
+     "Importe": -1000000,
+     "Vence": null
+    }
+   },
+   {
+    "rowNumber": 12,
+    "values": {
+     "Email": "q@q.com",
+     "Nº": "x\r\nSubject: hola",
+     "Cliente": "Línea1\nLínea2",
+     "Importe": "12,5 €",
+     "Vence": 5
+    }
+   }
+  ],
+  "expected": [
+   {
+    "sheet": "Enero",
+    "row": null,
+    "key": "4c464e09df98091e0226580b4d1de760efe5a502",
+    "from": "",
+    "to": "ana@x.com, luis@y.es; marta@y.es, mal, z@z.com, q@q.com",
+    "cc": "",
+    "subject": "Resumen",
+    "body": "ana@x.com, luis@y.es; marta@y.es, mal, z@z.com, q@q.com",
+    "problem": "El destinatario «ana@x.com, luis@y.es; marta@y.es, mal, z@z.com, q@q.com» no es una dirección de correo válida."
+   }
+  ]
+ },
+ {
+  "name": "copia con problema",
+  "action": {
+   "type": "email",
+   "to": "{col:Email}",
+   "subject": "Factura {col:Nº} pendiente",
+   "body": "Hola {col:Cliente}, debes {col:Importe} desde {col:Vence}.\nArchivo {file}, hoja {sheet}, regla {rule}, {count} filas, fila {rows}.",
+   "cc": "jefe@x.com; {col:Cliente}"
+  },
+  "meta": {
+   "fileName": "Facturas.xlsx",
+   "ruleName": "Vencidas",
+   "sheetName": "Enero",
+   "columnName": "Estado",
+   "count": 3
+  },
+  "headers": [
+   "Email",
+   "Nº",
+   "Cliente",
+   "Importe",
+   "Vence",
+   "Estado"
+  ],
+  "rows": [
+   {
+    "rowNumber": 2,
+    "values": {
+     "Email": "ana@x.com",
+     "Nº": 17,
+     "Cliente": "Ana",
+     "Importe": 1234.5,
+     "Vence": {
+      "$date": "2026-10-09T00:00:00Z"
+     }
+    }
+   },
+   {
+    "rowNumber": 5,
+    "values": {
+     "Email": "luis@y.es; marta@y.es",
+     "Nº": 18,
+     "Cliente": "Luis",
+     "Importe": 12345.678,
+     "Vence": {
+      "$date": "2026-10-08T23:58:00Z"
+     }
+    }
+   },
+   {
+    "rowNumber": 9,
+    "values": {
+     "Email": "mal",
+     "Nº": 19,
+     "Cliente": "Eva  Pérez",
+     "Importe": 0.125,
+     "Vence": "2026-12-01"
+    }
+   },
+   {
+    "rowNumber": 11,
+    "values": {
+     "Email": "z@z.com",
+     "Nº": 20,
+     "Cliente": true,
+     "Importe": -1000000,
+     "Vence": null
+    }
+   },
+   {
+    "rowNumber": 12,
+    "values": {
+     "Email": "q@q.com",
+     "Nº": "x\r\nSubject: hola",
+     "Cliente": "Línea1\nLínea2",
+     "Importe": "12,5 €",
+     "Vence": 5
+    }
+   }
+  ],
+  "expected": [
+   {
+    "sheet": "Enero",
+    "row": 2,
+    "key": "48404f94c81004f0d5c1136a3730bec3655afc82",
+    "from": "",
+    "to": "ana@x.com",
+    "cc": "jefe@x.com; Ana",
+    "subject": "Factura 17 pendiente",
+    "body": "Hola Ana, debes 1234,5 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 2.",
+    "problem": "La copia «jefe@x.com; Ana» no es una dirección de correo válida."
+   },
+   {
+    "sheet": "Enero",
+    "row": 5,
+    "key": "38b9e3429af8f9f8e7ab7e63893a29223ee75d2c",
+    "from": "",
+    "to": "luis@y.es; marta@y.es",
+    "cc": "jefe@x.com; Luis",
+    "subject": "Factura 18 pendiente",
+    "body": "Hola Luis, debes 12.345,68 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 5.",
+    "problem": "La copia «jefe@x.com; Luis» no es una dirección de correo válida."
+   },
+   {
+    "sheet": "Enero",
+    "row": 9,
+    "key": "67cb4446a19cd24027bc92307d02135075dc6855",
+    "from": "",
+    "to": "mal",
+    "cc": "jefe@x.com; Eva Pérez",
+    "subject": "Factura 19 pendiente",
+    "body": "Hola Eva Pérez, debes 0,13 desde 2026-12-01.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 9.",
+    "problem": "El destinatario «mal» no es una dirección de correo válida."
+   },
+   {
+    "sheet": "Enero",
+    "row": 11,
+    "key": "d3204e4a17b6d8c11a2961c2778703963604e064",
+    "from": "",
+    "to": "z@z.com",
+    "cc": "jefe@x.com; Sí",
+    "subject": "Factura 20 pendiente",
+    "body": "Hola Sí, debes -1.000.000 desde .\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 11.",
+    "problem": "La copia «jefe@x.com; Sí» no es una dirección de correo válida."
+   },
+   {
+    "sheet": "Enero",
+    "row": 12,
+    "key": "90f3dcea22e9fb4db1ec7bc7c487bb618cd1cbfa",
+    "from": "",
+    "to": "q@q.com",
+    "cc": "jefe@x.com; Línea1 Línea2",
+    "subject": "Factura x Subject: hola pendiente",
+    "body": "Hola Línea1 Línea2, debes 12,5 € desde 5.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 12.",
+    "problem": "La copia «jefe@x.com; Línea1 Línea2» no es una dirección de correo válida."
+   }
+  ]
+ },
+ {
+  "name": "copia válida de columna",
+  "action": {
+   "type": "email",
+   "to": "{col:Email}",
+   "subject": "Factura {col:Nº} pendiente",
+   "body": "Hola {col:Cliente}, debes {col:Importe} desde {col:Vence}.\nArchivo {file}, hoja {sheet}, regla {rule}, {count} filas, fila {rows}.",
+   "cc": "archivo@x.com"
+  },
+  "meta": {
+   "fileName": "Facturas.xlsx",
+   "ruleName": "Vencidas",
+   "sheetName": "Enero",
+   "columnName": "Estado",
+   "count": 3
+  },
+  "headers": [
+   "Email",
+   "Nº",
+   "Cliente",
+   "Importe",
+   "Vence",
+   "Estado"
+  ],
+  "rows": [
+   {
+    "rowNumber": 2,
+    "values": {
+     "Email": "ana@x.com",
+     "Nº": 17,
+     "Cliente": "Ana",
+     "Importe": 1234.5,
+     "Vence": {
+      "$date": "2026-10-09T00:00:00Z"
+     }
+    }
+   }
+  ],
+  "expected": [
+   {
+    "sheet": "Enero",
+    "row": 2,
+    "key": "48404f94c81004f0d5c1136a3730bec3655afc82",
+    "from": "",
+    "to": "ana@x.com",
+    "cc": "archivo@x.com",
+    "subject": "Factura 17 pendiente",
+    "body": "Hola Ana, debes 1234,5 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 2.",
+    "problem": null
+   }
+  ]
+ },
+ {
+  "name": "por fila con responsable",
+  "action": {
+   "type": "email",
+   "to": "{col:Email}",
+   "subject": "Factura {col:Nº} pendiente",
+   "body": "Hola {col:Cliente}, debes {col:Importe} desde {col:Vence}.\nArchivo {file}, hoja {sheet}, regla {rule}, {count} filas, fila {rows}.",
+   "senderColumn": "Resp"
+  },
+  "meta": {
+   "fileName": "Facturas.xlsx",
+   "ruleName": "Vencidas",
+   "sheetName": "Enero",
+   "columnName": "Estado",
+   "count": 3
+  },
+  "headers": [
+   "Email",
+   "Nº",
+   "Cliente",
+   "Importe",
+   "Vence",
+   "Estado",
+   "Resp"
+  ],
+  "rows": [
+   {
+    "rowNumber": 2,
+    "values": {
+     "Email": "ana@x.com",
+     "Nº": 17,
+     "Cliente": "Ana",
+     "Importe": 1234.5,
+     "Vence": {
+      "$date": "2026-10-09T00:00:00Z"
+     },
+     "Resp": "Ana López / Luis"
+    }
+   },
+   {
+    "rowNumber": 5,
+    "values": {
+     "Email": "luis@y.es; marta@y.es",
+     "Nº": 18,
+     "Cliente": "Luis",
+     "Importe": 12345.678,
+     "Vence": {
+      "$date": "2026-10-08T23:58:00Z"
+     },
+     "Resp": "  Eva "
+    }
+   },
+   {
+    "rowNumber": 9,
+    "values": {
+     "Email": "mal",
+     "Nº": 19,
+     "Cliente": "Eva  Pérez",
+     "Importe": 0.125,
+     "Vence": "2026-12-01",
+     "Resp": null
+    }
+   },
+   {
+    "rowNumber": 11,
+    "values": {
+     "Email": "z@z.com",
+     "Nº": 20,
+     "Cliente": true,
+     "Importe": -1000000,
+     "Vence": null,
+     "Resp": "x"
+    }
+   },
+   {
+    "rowNumber": 12,
+    "values": {
+     "Email": "q@q.com",
+     "Nº": "x\r\nSubject: hola",
+     "Cliente": "Línea1\nLínea2",
+     "Importe": "12,5 €",
+     "Vence": 5,
+     "Resp": "x"
+    }
+   }
+  ],
+  "expected": [
+   {
+    "sheet": "Enero",
+    "row": 2,
+    "key": "48404f94c81004f0d5c1136a3730bec3655afc82",
+    "from": "",
+    "to": "ana@x.com",
+    "cc": "",
+    "subject": "Factura 17 pendiente",
+    "body": "Hola Ana, debes 1234,5 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 2.",
+    "problem": null,
+    "sender": [
+     "ana lopez",
+     "luis"
     ]
-  }
+   },
+   {
+    "sheet": "Enero",
+    "row": 5,
+    "key": "38b9e3429af8f9f8e7ab7e63893a29223ee75d2c",
+    "from": "",
+    "to": "luis@y.es; marta@y.es",
+    "cc": "",
+    "subject": "Factura 18 pendiente",
+    "body": "Hola Luis, debes 12.345,68 desde 09/10/2026.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 5.",
+    "problem": null,
+    "sender": [
+     "eva"
+    ]
+   },
+   {
+    "sheet": "Enero",
+    "row": 9,
+    "key": "67cb4446a19cd24027bc92307d02135075dc6855",
+    "from": "",
+    "to": "mal",
+    "cc": "",
+    "subject": "Factura 19 pendiente",
+    "body": "Hola Eva Pérez, debes 0,13 desde 2026-12-01.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 9.",
+    "problem": "El destinatario «mal» no es una dirección de correo válida.",
+    "sender": []
+   },
+   {
+    "sheet": "Enero",
+    "row": 11,
+    "key": "d3204e4a17b6d8c11a2961c2778703963604e064",
+    "from": "",
+    "to": "z@z.com",
+    "cc": "",
+    "subject": "Factura 20 pendiente",
+    "body": "Hola Sí, debes -1.000.000 desde .\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 11.",
+    "problem": null,
+    "sender": [
+     "x"
+    ]
+   },
+   {
+    "sheet": "Enero",
+    "row": 12,
+    "key": "90f3dcea22e9fb4db1ec7bc7c487bb618cd1cbfa",
+    "from": "",
+    "to": "q@q.com",
+    "cc": "",
+    "subject": "Factura x Subject: hola pendiente",
+    "body": "Hola Línea1 Línea2, debes 12,5 € desde 5.\nArchivo Facturas.xlsx, hoja Enero, regla Vencidas, 3 filas, fila 12.",
+    "problem": null,
+    "sender": [
+     "x"
+    ]
+   }
+  ]
+ }
 ]

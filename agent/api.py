@@ -48,7 +48,7 @@ class Api:
             if res.status_code in (401, 403):
                 raise ApiError("Clave anon rechazada: revisa SUPABASE_ANON_KEY")
             if res.status_code == 404:
-                raise ApiError("Faltan migraciones en Supabase: ejecuta las migraciones 0007, 0008, 0010, 0012 y 0014 de supabase/migrations")
+                raise ApiError("Faltan migraciones en Supabase: ejecuta las migraciones 0007, 0008, 0010, 0012, 0014 y 0015 de supabase/migrations")
             raise ApiError(msg[:200] or f"HTTP {res.status_code}")
         return res.json() if res.content else None
 

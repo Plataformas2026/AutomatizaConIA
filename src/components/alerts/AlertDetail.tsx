@@ -3,8 +3,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { personalize, type MyShare } from '@/lib/assign/assign';
 import { defaultColumns, rowLabel } from '@/lib/alerts/rows';
-import type { AlertRow } from '../AlertsProvider';
+import { createClient } from '@/lib/supabase/client';
+import { useAlerts, type AlertRow } from '../AlertsProvider';
 import { useAlertRows } from './useAlertRows';
+
+interface TaskLabel {
+  now: string | null;
+  next: string | null;
+  prev: string | null;
+  canPass: boolean;
+  canBack: boolean;
+  mine: boolean;
+}
+const title = (n: string | null) => (n ? n.replace(/\b\p{L}/gu, (c) => c.toUpperCase()) : '');
 
 const SEVERITY_LABEL = { info: 'Informativa', warning: 'Aviso', critical: 'Crítica' } as const;
 
@@ -25,6 +36,35 @@ export function AlertDetail({
   const state = useAlertRows(alert.id);
   const [allCols, setAllCols] = useState(false);
   const [onlyMine, setOnlyMine] = useState(false);
+  const { reloadHandoffs } = useAlerts();
+  const [labels, setLabels] = useState<Record<string, TaskLabel>>({});
+  const [taskError, setTaskError] = useState<string | null>(null);
+  const chainRows = useMemo(() => Object.keys(alert.chains ?? {}).map(Number), [alert.chains]);
+
+  async function loadLabels() {
+    const supabase = createClient();
+    const next: Record<string, TaskLabel> = {};
+    for (let i = 0; i < chainRows.length; i += 40) {
+      const { data } = await supabase.rpc('alert_task_labels', { p_alert: alert.id, p_rows: chainRows.slice(i, i + 40) });
+      Object.assign(next, data ?? {});
+    }
+    setLabels(next);
+  }
+  useEffect(() => {
+    if (chainRows.length) void loadLabels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alert.id, chainRows.length]);
+
+  async function pass(row: number, delta: 1 | -1) {
+    setTaskError(null);
+    const { error } = await createClient().rpc('handoff_task', { p_alert: alert.id, p_row: row, p_delta: delta });
+    if (error) {
+      setTaskError('No se pudo pasar la tarea. Puede que ya no la tengas tú.');
+      return;
+    }
+    if (alert.rule_id) await reloadHandoffs(alert.rule_id);
+    await loadLabels();
+  }
 
   useEffect(() => {
     const d = ref.current;
@@ -65,6 +105,7 @@ export function AlertDetail({
       </div>
 
       <h3 className="share-h">Filas que han disparado la alerta</h3>
+      {taskError && <p className="err" role="alert">{taskError}</p>}
       {state.status === 'loading' && <p className="muted" role="status">Leyendo las filas del archivo…</p>}
       {state.status === 'error' && <p className="err" role="alert">{state.message}</p>}
       {data && (
@@ -91,6 +132,7 @@ export function AlertDetail({
                 <thead>
                   <tr>
                     <th scope="col">Fila</th>
+                    {chainRows.length > 0 && <th scope="col">Responsable</th>}
                     {cols.map((i) => (
                       <th key={i} scope="col" className={data.highlight.includes(data.headers[i]) ? 'is-rule' : ''}>
                         {data.headers[i]}
@@ -106,6 +148,27 @@ export function AlertDetail({
                         {r.n}
                         {mine.has(r.n) && <span className="ad-mine"> tuya</span>}
                       </th>
+                      {chainRows.length > 0 && (
+                        <td>
+                          {labels[String(r.n)] ? (
+                            <span className="task-cell">
+                              <span>{title(labels[String(r.n)].now)}{labels[String(r.n)].mine ? ' (tú)' : ''}</span>
+                              {labels[String(r.n)].canPass && labels[String(r.n)].next && (
+                                <button type="button" className="btn" onClick={() => void pass(r.n, 1)}>
+                                  Pasar tarea a {title(labels[String(r.n)].next)}
+                                </button>
+                              )}
+                              {labels[String(r.n)].canBack && labels[String(r.n)].prev && (
+                                <button type="button" className="btn ghost-line" onClick={() => void pass(r.n, -1)}>
+                                  Devolver a {title(labels[String(r.n)].prev)}
+                                </button>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="muted">—</span>
+                          )}
+                        </td>
+                      )}
                       {cols.map((i) => (
                         <td key={i} className={data.highlight.includes(data.headers[i]) ? 'is-rule' : ''}>
                           {r.cells[i] || <span className="muted">—</span>}

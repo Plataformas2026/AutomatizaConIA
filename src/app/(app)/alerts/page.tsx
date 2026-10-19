@@ -13,7 +13,7 @@ export default async function AlertsPage() {
     ctx.supabase
       .from('alerts')
       .select(
-        'id, company_id, project_id, file_id, rule_id, template_id, assignees, file_name, rule_name, sheet_name, message, severity, matched_count, row_refs, status, created_at',
+        'id, company_id, project_id, file_id, rule_id, template_id, assignees, chains, audience, rev, file_name, rule_name, sheet_name, message, severity, matched_count, row_refs, status, created_at',
       )
       .neq('status', 'dismissed')
       .order('created_at', { ascending: false })
@@ -27,6 +27,7 @@ export default async function AlertsPage() {
   const names = new Map((projects ?? []).map((p) => [p.id as string, p.name as string]));
   const rows: AlertRow[] = (alerts ?? []).map(({ company_id, ...a }) => ({
     ...a,
+    company_id,
     project_name: a.project_id ? (names.get(a.project_id) ?? null) : null,
     shared: company_id !== ctx.companyId,
   })) as AlertRow[];
@@ -41,7 +42,7 @@ export default async function AlertsPage() {
       <h1>Alertas</h1>
       <p className="sub">
         Cada alerta pertenece al proyecto de su archivo. Las de proyectos que han compartido contigo aparecen aquí
-        solo para consultar.
+        solo para consultar; solo te avisan las que te corresponden (o las que el dueño ha marcado para todos).
       </p>
       <AlertsList initial={rows} projects={options} me={me} />
     </>

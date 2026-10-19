@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import { useEmails } from '../EmailsProvider';
 import { IconCheck, IconFolder, IconMail, IconTable } from '../Icons';
 
@@ -21,7 +22,13 @@ export interface OutboxItem {
   projectId: string | null;
   projectName: string | null;
   createdAt: string;
+  /** Es de un proyecto compartido conmigo (me toca mandarlo a mí). */
+  shared?: boolean;
+  /** Tarea con varios nombres: quién la tiene ahora y a quién se puede pasar. */
+  handoff?: { alertId: string; now: string | null; next: string | null; prev: string | null; canPass: boolean; canBack: boolean; mine: boolean } | null;
 }
+
+const title = (n: string | null) => (n ? n.replace(/\b\p{L}/gu, (c) => c.toUpperCase()) : '');
 
 /**
  * «Tienes pendiente mandar el correo…», agrupado por proyecto igual que las alertas.
@@ -49,6 +56,25 @@ export function OutboxPanel({ items: initial, projects }: { items: OutboxItem[];
       return;
     }
     setItems((cur) => cur.filter((i) => i.id !== id));
+    void refreshPending();
+    router.refresh();
+  }
+
+  async function handoff(item: OutboxItem, delta: 1 | -1) {
+    setError(null);
+    if (!item.handoff || item.rowNumber == null) return;
+    if (
+      delta === 1 &&
+      item.status === 'drafted' &&
+      !window.confirm('Ya hay un borrador de este correo en tu Outlook. Se queda ahí: bórralo tú. A la otra persona le llegará uno nuevo. ¿Pasar la tarea?')
+    ) {
+      return;
+    }
+    const { error: rpcError } = await createClient().rpc('handoff_task', { p_alert: item.handoff.alertId, p_row: item.rowNumber, p_delta: delta });
+    if (rpcError) {
+      setError('No se pudo pasar la tarea. Puede que ya no la tengas tú.');
+      return;
+    }
     void refreshPending();
     router.refresh();
   }
@@ -121,6 +147,8 @@ export function OutboxPanel({ items: initial, projects }: { items: OutboxItem[];
                   {i.rowNumber != null && <span className="tag tag-count">Fila {i.rowNumber}</span>}
                   <span className="tag tag-rule">Regla «{i.ruleName}»</span>
                   {i.status === 'drafted' && <span className="tag tag-count">Borrador en tu Outlook</span>}
+                  {i.shared && <span className="tag tag-count">Compartido contigo</span>}
+                  {i.handoff && !i.handoff.mine && i.handoff.now && <span className="tag tag-count">Lo tiene {title(i.handoff.now)}</span>}
                 </div>
                 <p className="muted" style={{ margin: '6px 0 0' }}>
                   <strong>Para:</strong> {i.to || '(sin destinatario)'}
@@ -147,6 +175,16 @@ export function OutboxPanel({ items: initial, projects }: { items: OutboxItem[];
                 <button type="button" className="btn" onClick={() => void copy(i)}>
                   {copied === i.id ? 'Copiado' : 'Copiar texto'}
                 </button>
+                {i.handoff?.canPass && i.handoff.next && (
+                  <button type="button" className="btn" onClick={() => void handoff(i, 1)}>
+                    Pasar tarea a {title(i.handoff.next)}
+                  </button>
+                )}
+                {i.handoff?.canBack && i.handoff.prev && (
+                  <button type="button" className="btn ghost-line" onClick={() => void handoff(i, -1)}>
+                    Devolver a {title(i.handoff.prev)}
+                  </button>
+                )}
                 <button type="button" className="btn" onClick={() => void resolve(i.id, 'sent')}>
                   <IconCheck size={16} /> Ya lo he enviado
                 </button>

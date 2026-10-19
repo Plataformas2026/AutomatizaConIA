@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 const MAX_SHARES = 20;
 const idSchema = z.string().uuid();
 const inviteSchema = z.object({ email: z.string().trim().toLowerCase().email().max(254) });
+const notifySchema = z.object({ id: z.string().uuid(), notify: z.enum(['assigned', 'all']) });
 const removeSchema = z.object({ kind: z.enum(['member', 'invitation']), id: z.string().uuid() });
 
 /** Solo la empresa propietaria del proyecto puede gestionarlo. */
@@ -35,14 +36,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ project
 
   const admin = createAdminClient();
   const [{ data: members }, { data: invitations }] = await Promise.all([
-    admin.from('project_members').select('user_id, created_at').eq('project_id', projectId).order('created_at'),
+    admin.from('project_members').select('user_id, created_at, notify').eq('project_id', projectId).order('created_at'),
     admin.from('project_invitations').select('id, email, created_at').eq('project_id', projectId).order('created_at'),
   ]);
 
   const people = await Promise.all(
     (members ?? []).map(async (m) => {
       const { data } = await admin.auth.admin.getUserById(m.user_id);
-      return { id: m.user_id as string, email: data.user?.email ?? 'Usuario', since: m.created_at as string };
+      return { id: m.user_id as string, email: data.user?.email ?? 'Usuario', since: m.created_at as string, notify: (m.notify as string) === 'all' ? 'all' : 'assigned' };
     }),
   );
 
@@ -79,6 +80,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
     .upsert({ project_id: projectId, email: body.data.email, invited_by: ctx.user.id }, { onConflict: 'project_id,email' });
   if (error) return NextResponse.json({ error: 'db_error' }, { status: 500 });
   return NextResponse.json({ ok: true }, { status: 201 });
+}
+
+/** Elige qué avisos recibe una persona: solo los suyos (según las columnas del Excel) o todos los del proyecto. */
+export async function PATCH(req: Request, { params }: { params: Promise<{ projectId: string }> }) {
+  const { projectId } = await params;
+  const r = await ownProject(projectId);
+  if ('error' in r) return r.error;
+  const body = notifySchema.safeParse(await req.json().catch(() => null));
+  if (!body.success) return NextResponse.json({ error: 'invalid_body' }, { status: 400 });
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from('project_members')
+    .update({ notify: body.data.notify })
+    .eq('project_id', projectId)
+    .eq('user_id', body.data.id);
+  if (error) return NextResponse.json({ error: 'db_error' }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }
 
 /** Quita el acceso de una persona o cancela una invitación. */
