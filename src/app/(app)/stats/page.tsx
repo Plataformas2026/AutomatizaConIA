@@ -63,8 +63,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
     <>
       <h1>Estadísticas</h1>
       <p className="sub">
-        Cada panel pertenece a un proyecto: las gráficas usan los archivos de ese proyecto y quien lo tenga compartido
-        las ve también. Los datos se leen en el momento (de Drive, o de tu ordenador a través del agente) y no se guardan: solo se conserva la configuración.
+        Cada panel pertenece a un proyecto.
       </p>
       <ProjectScope basePath="/stats" value={scope} options={options} />
       {readOnly && (
