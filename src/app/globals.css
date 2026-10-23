@@ -7,7 +7,7 @@
    «formato condicional» para la importancia de cada alerta. */
 
 :root {
-  --bg: #f4f3fb;
+   --bg: #ffffff;
   --grid: rgba(76, 52, 200, 0.07);
   --surface: #ffffff;
   --surface-2: #f0eefb;
@@ -86,11 +86,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 body {
-  background-color: var(--bg);
-  background-image:
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 28px 28px;
+  background-color: #ffffff;
   color: var(--text);
   font: 15px/1.55 var(--font-body);
   -webkit-font-smoothing: antialiased;
