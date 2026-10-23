@@ -26,8 +26,7 @@ export default async function LogsPage() {
     <>
       <h1>Logs de los agentes</h1>
       <p className="sub">
-        Aquí llegan los avisos y errores de los agentes de tus ordenadores, sin abrir ningún archivo <code>agent.log</code>.
-        Solo se envían mensajes del propio agente (nunca el contenido de tus archivos) y se conservan 14 días.
+        Aquí llegan los avisos y errores de los agentes de tus ordenadores. Se conservan 14 días.
       </p>
       <LogsPanel
         companyId={ctx.companyId}
