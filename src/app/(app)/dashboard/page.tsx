@@ -77,7 +77,7 @@ export default async function DashboardPage({
     <>
       <h1>Dashboard</h1>
       <p className="sub">
-        Tus archivos permanecen en tu Google Drive. Aquí solo guardamos la configuración y las alertas.
+        Los datos de tu archivos permanecen en tu entorno local o en tu Google Drive. Por privacidad, el programa no guarda tus datos, solo guarda la configuración y las alertas.
       </p>
 
       {google && NOTICES[google] && <div className="notice">{NOTICES[google]}</div>}
