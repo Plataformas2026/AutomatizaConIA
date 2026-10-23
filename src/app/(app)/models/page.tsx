@@ -17,7 +17,7 @@ export default async function ModelsPage() {
       <h1>Informes y Modelos IA</h1>
       <p className="sub">
         Predice cifras, clasifica casos, encuentra valores raros o descubre grupos en tus archivos, sin saber de estadística.
-        El informe se genera al momento con los datos de tu Drive o de los archivos de tu ordenador (a través del agente) y no se guarda en ningún sitio: si quieres conservarlo,
+        El informe no se guarda en ningún sitio: si quieres conservarlo,
         descárgalo.
       </p>
       <ModelStudio files={files ?? []} />
