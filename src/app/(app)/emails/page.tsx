@@ -83,8 +83,8 @@ export default async function EmailsPage() {
     <>
       <h1>Correos pendientes</h1>
       <p className="sub">
-        Correos que tus reglas han preparado con los datos de tus archivos y que todavía no se han enviado. Cada uno
-        pertenece al proyecto de su archivo. También ves aquí los que te toca mandar a ti en proyectos compartidos. Cópialo a tu Outlook, envíalo y pulsa «Ya lo he enviado».
+        Correos que todavía no se han enviado. Cada uno
+        pertenece al proyecto de su archivo. También ves aquí los que te toca mandar a ti en proyectos compartidos. Búscalo en borradores o cópialo a tu Outlook, envíalo y pulsa «Ya lo he enviado».
       </p>
       <OutboxPanel items={items} projects={(projects ?? []).map((p) => ({ id: p.id as string, name: p.name as string }))} />
     </>
