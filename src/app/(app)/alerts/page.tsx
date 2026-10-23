@@ -40,10 +40,6 @@ export default async function AlertsPage() {
   return (
     <>
       <h1>Alertas</h1>
-      <p className="sub">
-        Cada alerta pertenece al proyecto de su archivo. Las de proyectos que han compartido contigo aparecen aquí
-        solo para consultar; solo te avisan las que te corresponden (o las que el dueño ha marcado para todos).
-      </p>
       <AlertsList initial={rows} projects={options} me={me} />
     </>
   );
